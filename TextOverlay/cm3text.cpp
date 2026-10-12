@@ -85,7 +85,16 @@ static wchar_t g_logPath[MAX_PATH];
 static bool g_attrEnabled = true;
 static int g_attrBarFrom = 13;              // rows with a value at or above this get a highlight bar
 static int g_attrBarAlpha = 130;            // 0-255
-static bool g_attrRoleAware = true;         // highlight what matters for the player's position, not just his best stats
+static COLORREF g_attrKeyColour = RGB(187, 68, 68);       // highlight colour: attributes that are key for the position
+static COLORREF g_attrSecondaryColour = RGB(55, 185, 40); // highlight colour: secondary attributes
+static COLORREF g_attrOtherColour = RGB(102, 102, 102);   // highlight colour: all the other attributes
+static COLORREF g_attrBorderColour = RGB(235, 205, 90);  // outline around the boxes of key attributes
+static const int ATTR_CELL_OFFSET = 133;     // game pixels from the start of the attribute name to the left edge of its value cell
+static const int ATTR_CELL_WIDTH = 90;       // game pixels: width of the value cell
+static bool g_attrBorder = false;             // outline the boxes of key attributes
+static bool g_attrByValue = true;           // colour by the attribute's value instead of by what matters for the position
+static const int ATTR_KEY_ABOVE = 14;       // by value: above this is "key"
+static const int ATTR_SECONDARY_FROM = 10;  // by value: this up to ATTR_KEY_ABOVE is "secondary", below it is "other"
 
 struct CachedFont { HFONT hfont; };
 static CachedFont g_hfonts[FONT_COUNT];
@@ -271,6 +280,18 @@ static void MeasureFont(int font)
     f.ready = true;
 }
 
+// Reads a colour setting written as RRGGBB hex; leaves the colour alone if it isn't there
+static void ReadColour(const wchar_t* path, const wchar_t* key, COLORREF& colour)
+{
+    wchar_t text[16];
+    GetPrivateProfileStringW(L"attributes", key, L"", text, 16, path);
+    if (wcslen(text) == 6)
+    {
+        unsigned rgb = wcstoul(text, NULL, 16);
+        colour = RGB((rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255);
+    }
+}
+
 static void LoadConfig()
 {
     wchar_t path[MAX_PATH];
@@ -332,7 +353,15 @@ static void LoadConfig()
     g_attrEnabled = GetPrivateProfileIntW(L"attributes", L"enabled", 1, path) != 0;
     g_attrBarFrom = GetPrivateProfileIntW(L"attributes", L"highlightfrom", 13, path);
     g_attrBarAlpha = GetPrivateProfileIntW(L"attributes", L"alpha", 130, path);
-    g_attrRoleAware = GetPrivateProfileIntW(L"attributes", L"roleaware", 1, path) != 0;
+    GetPrivateProfileStringW(L"attributes", L"mode", L"value", value, 128, path);
+    g_attrByValue = _wcsicmp(value, L"value") == 0;
+    g_attrBorder = GetPrivateProfileIntW(L"attributes", L"border", 0, path) != 0;
+
+    // highlight colours as RRGGBB hex
+    ReadColour(path, L"keycolour", g_attrKeyColour);
+    ReadColour(path, L"secondarycolour", g_attrSecondaryColour);
+    ReadColour(path, L"othercolour", g_attrOtherColour);
+    ReadColour(path, L"bordercolour", g_attrBorderColour);
 
     GetPrivateProfileStringW(L"text", L"quality", L"gray", value, 128, path);
     g_quality = (_wcsicmp(value, L"cleartype") == 0) ? CLEARTYPE_QUALITY : ANTIALIASED_QUALITY;
@@ -512,25 +541,72 @@ static bool IsAttributeName(const std::string& text)
 
 // ---- roles: which attributes matter for a position ----
 // The player screen shows a label such as "Goalkeeper", "Defender (Right)" or "Defender/Midfielder (Right/Centre)".
-// Each role has a base set of key attributes, plus extras for playing out wide (Right/Left) or in the centre.
+// Each role has two tiers of attributes: key ones (full-strength bar) and secondary ones (fainter bar), separately for
+// playing in the centre and playing wide (Right/Left).
+// Names are the game's own ("Off The Ball" = movement, "Shooting" = finishing/long shots, "Set Pieces" = free kicks).
 struct RoleDef
 {
     const char* word;
-    const char* base;
-    const char* centre;
-    const char* wide;
+    const char* keyCentre;
+    const char* secCentre;
+    const char* keyWide;
+    const char* secWide;
 };
 
+// ---- the attribute lists, one KEY and one SEC list per kind of player ----
+// Edit these to change what gets highlighted. A name in KEY wins over the same name in SEC.
+#define DET ",Determination"
+
+// goalkeeper
+#define GK_KEY "Anticipation,Handling,Agility,Jumping,Positioning,Reflexes"
+#define GK_SEC "Acceleration,Pace,Strength" DET
+
+// sweeper
+#define SW_KEY "Marking,Tackling,Heading,Positioning,Strength,Pace"
+#define SW_SEC "Jumping,Stamina,Passing,Acceleration" DET
+
+// defender
+#define CB_KEY "Heading,Jumping,Pace,Positioning,Stamina,Strength,Marking,Tackling" DET
+#define CB_SEC "Acceleration,Agility,Passing"
+
+// defender (wide: full back)
+#define FB_KEY "Acceleration,Agility,Marking,Tackling,Stamina,Pace,Positioning"
+#define FB_SEC "Heading,Jumping,Dribbling,Strength,Crossing,Passing" DET
+
+// defensive midfielder
+#define DM_KEY "Marking,Passing,Tackling,Positioning,Strength,Teamwork,Work Rate" DET
+#define DM_SEC "Acceleration,Heading,Jumping,Pace,Stamina,Technique"
+
+// midfielder (centre)
+#define MC_KEY "Anticipation,Balance,Dribbling,Flair,Passing,Stamina,Technique"
+#define MC_SEC "Acceleration,Heading,Jumping,Pace,Strength,Teamwork" DET
+
+// attacking midfielder
+#define AM_KEY "Dribbling,Flair,Shooting,Off The Ball,Passing"
+#define AM_SEC DM_SEC
+
+// winger (the wide version of several roles below)
+#define WG_KEY "Acceleration,Agility,Crossing,Dribbling,Pace,Flair" DET
+#define WG_SEC "Flair,Heading,Jumping,Stamina,Strength,Teamwork"
+
+// striker
+#define ST_KEY "Shooting,Pace,Off The Ball,Acceleration,Bravery" DET
+#define ST_SEC "Crossing,Dribbling,Flair,Set Pieces,Heading,Jumping,Passing,Technique"
+
+// ---- the roles ----
+// Columns: position word, then key and secondary lists when playing in the centre (or with no side shown), then key and
+// secondary lists when playing wide (Right/Left). Empty wide lists mean the centre lists are used on every side.
 static const RoleDef ROLES[] = {
-    { "Goalkeeper", "Handling,Reflexes,Positioning,Agility,Anticipation,Bravery", "", "" },
-    { "Sweeper", "Positioning,Anticipation,Tackling,Marking,Heading,Passing", "", "" },
-    { "Defender", "Tackling,Marking,Positioning,Anticipation,Bravery", "Heading,Jumping,Strength", "Pace,Acceleration,Stamina,Crossing" },
-    { "Defensive Midfielder", "Tackling,Positioning,Anticipation,Teamwork,Work Rate,Stamina,Passing,Marking", "", "" },
-    { "Midfielder", "Passing,Technique,Teamwork,Work Rate,Stamina,Creativity,Positioning", "", "Pace,Crossing,Dribbling,Acceleration" },
-    { "Attacking Midfielder", "Creativity,Passing,Technique,Flair,Dribbling,Off The Ball,Shooting", "", "Pace,Crossing,Acceleration" },
-    { "Striker", "Shooting,Off The Ball,Heading,Pace,Acceleration,Technique,Strength,Dribbling", "", "" },
-    { "Forward", "Shooting,Off The Ball,Heading,Pace,Acceleration,Technique,Strength,Dribbling", "", "" },
-    { "Attacker", "Shooting,Off The Ball,Heading,Pace,Acceleration,Technique,Strength,Dribbling", "", "" },
+    //  position                 centre key  centre sec  wide key               wide sec
+    { "Goalkeeper",            GK_KEY,     GK_SEC,     "",                    "" },
+    { "Sweeper",               SW_KEY,     SW_SEC,     "",                    "" },
+    { "Defender",              CB_KEY,     CB_SEC,     FB_KEY,                FB_SEC },              // centre back / full back
+    { "Defensive Midfielder",  DM_KEY,     DM_SEC,     "",                    "" },
+    { "Midfielder",            MC_KEY,     MC_SEC,     MC_KEY "," WG_KEY,     MC_SEC "," WG_SEC },   // midfielder + winger
+    { "Attacking Midfielder",  AM_KEY,     AM_SEC,     "",                    "" },
+    { "Striker",               ST_KEY,     ST_SEC,     "",                    "" },
+    { "Forward",               ST_KEY,     ST_SEC,     WG_KEY "," ST_KEY,     WG_SEC "," ST_SEC },   // winger + striker
+    { "Attacker",              ST_KEY,     ST_SEC,     WG_KEY,                WG_SEC },              // winger
 };
 
 static unsigned MaskOf(const char* commaList)
@@ -561,7 +637,7 @@ static std::string Lower(std::string s)
 }
 
 // If text is a position label, returns true and the mask of the attributes that matter for it
-static bool ParseRoleLabel(const std::string& text, unsigned& mask)
+static bool ParseRoleLabel(const std::string& text, unsigned& keyMask, unsigned& secMask)
 {
     std::string s = Trim(text);
     if (s.empty() || s.size() > 80)
@@ -574,7 +650,7 @@ static bool ParseRoleLabel(const std::string& text, unsigned& mask)
     bool wide = sides.find("right") != std::string::npos || sides.find("left") != std::string::npos;
     bool centre = sides.find("centre") != std::string::npos || sides.find("center") != std::string::npos || !wide;
 
-    unsigned result = 0;
+    unsigned key = 0, sec = 0;
     size_t start = 0;
     int roles = 0;
     while (start <= rolesPart.size())
@@ -589,11 +665,19 @@ static bool ParseRoleLabel(const std::string& text, unsigned& mask)
         {
             if (word == Lower(ROLES[i].word))
             {
-                result |= MaskOf(ROLES[i].base);
-                if (centre)
-                    result |= MaskOf(ROLES[i].centre);
-                if (wide)
-                    result |= MaskOf(ROLES[i].wide);
+                const RoleDef& r = ROLES[i];
+                // a role with no wide variant uses its centre attributes whatever the side
+                bool useWide = wide && r.keyWide[0];
+                if (centre || !useWide)
+                {
+                    key |= MaskOf(r.keyCentre);
+                    sec |= MaskOf(r.secCentre);
+                }
+                if (useWide)
+                {
+                    key |= MaskOf(r.keyWide);
+                    sec |= MaskOf(r.secWide);
+                }
                 known = true;
                 break;
             }
@@ -606,15 +690,16 @@ static bool ParseRoleLabel(const std::string& text, unsigned& mask)
 
     if (roles == 0)
         return false;
-    mask = result;
+    keyMask = key;
+    secMask = sec & ~key;
     return true;
 }
 
 // The key attributes of the player on screen: from the newest position label the game has drawn
-static bool CurrentRoleMask(unsigned& mask)
+static bool CurrentRoleMask(unsigned& keyMask, unsigned& secMask)
 {
     for (int i = (int)g_items.size() - 1; i >= 0 && i >= (int)g_items.size() - 400; i--)
-        if (ParseRoleLabel(g_items[i]->text, mask))
+        if (ParseRoleLabel(g_items[i]->text, keyMask, secMask))
             return true;
     return false;
 }
@@ -629,20 +714,6 @@ static bool ParseAttributeValue(const std::string& text, int& value)
             return false;
     value = atoi(s.c_str());
     return value >= 1 && value <= 20;
-}
-
-// Colour of an attribute value, from dim (poor) to bright green (excellent)
-static COLORREF AttributeColour(int value)
-{
-    if (value <= 4)
-        return RGB(150, 112, 112);
-    if (value <= 8)
-        return RGB(185, 185, 185);
-    if (value <= 12)
-        return RGB(255, 236, 130);
-    if (value <= 15)
-        return RGB(176, 240, 96);
-    return RGB(70, 255, 120);
 }
 
 static bool SameRow(const Item& a, const Item& b)
@@ -862,7 +933,7 @@ static void DrawItem(HDC hdc, const Item& it, double scale, int ox, int oy)
     FontInfo& f = g_fonts[it.font];
     HFONT hfont = GetFont(hdc, it.font, scale);
     SelectObject(hdc, hfont);
-    COLORREF colour = (g_attrEnabled && it.attrValue > 0) ? AttributeColour(it.attrValue) : ToColorRef(it.colour);
+    COLORREF colour = ToColorRef(it.colour);
     SetTextColor(hdc, colour);
 
     std::vector<int> adv;
@@ -949,11 +1020,11 @@ void __cdecl Cm3_AfterStretch(HDC hdc, int dl, int dt, int dw, int dh, int scale
         HDC colourDc = CreateCompatibleDC(hdc);
         HBITMAP colourBitmap = CreateCompatibleBitmap(hdc, 1, 1);
         HGDIOBJ oldBitmap = SelectObject(colourDc, colourBitmap);
-        SetPixel(colourDc, 0, 0, RGB(40, 150, 70));
+        SetPixel(colourDc, 0, 0, g_attrKeyColour);
         BLENDFUNCTION blend = { AC_SRC_OVER, 0, (BYTE)max(0, min(255, g_attrBarAlpha)), 0 };
 
-        unsigned keyMask = 0;
-        bool haveRole = g_attrRoleAware && CurrentRoleMask(keyMask);
+        unsigned keyMask = 0, secMask = 0;
+        bool haveRole = !g_attrByValue && CurrentRoleMask(keyMask, secMask);
 
         for (size_t i = 0; i < g_items.size(); i++)
         {
@@ -961,30 +1032,67 @@ void __cdecl Cm3_AfterStretch(HDC hdc, int dl, int dt, int dw, int dh, int scale
             if (!item->lifted || item->attrValue < 1)
                 continue;
 
-            // Which bar, if any: for a known position, bars go on the attributes that matter for it (green if strong,
-            // blue if weak); otherwise just on the player's best attributes
-            bool strong = item->attrValue >= g_attrBarFrom;
+            // Which highlight: by value, every attribute is coloured by how good it is; by position, every attribute is
+            // coloured by whether it is key, secondary or neither for the player's position (if that isn't known, just the
+            // player's best attributes, in the key colour)
             COLORREF barColour;
-            if (haveRole)
+            bool key = false;
+            if (g_attrByValue)
             {
-                if (item->attrName < 0 || !(keyMask & (1u << item->attrName)))
+                if (item->attrValue > ATTR_KEY_ABOVE)
+                {
+                    key = true;
+                    barColour = g_attrKeyColour;
+                }
+                else
+                    barColour = item->attrValue >= ATTR_SECONDARY_FROM ? g_attrSecondaryColour : g_attrOtherColour;
+            }
+            else if (haveRole)
+            {
+                if (item->attrName < 0)
                     continue;
-                barColour = strong ? RGB(40, 150, 70) : RGB(50, 90, 175);
+                unsigned bit = 1u << item->attrName;
+                if (keyMask & bit)
+                {
+                    key = true;
+                    barColour = g_attrKeyColour;
+                }
+                else
+                    barColour = (secMask & bit) ? g_attrSecondaryColour : g_attrOtherColour;
             }
             else
             {
-                if (!strong)
+                if (item->attrValue < g_attrBarFrom)
                     continue;
-                barColour = RGB(40, 150, 70);
+                barColour = g_attrKeyColour;
             }
             SetPixel(colourDc, 0, 0, barColour);
 
             FontInfo& f = g_fonts[item->font];
-            int left = (int)floor(ox + item->barLeft * scale + 0.5);
-            int right = (int)floor(ox + (item->bounds.right + 4) * scale + 0.5);
+            // The game's own cell for the value: a fixed distance to the right of the attribute name's start
+            int cellLeft = item->barLeft + 3 + ATTR_CELL_OFFSET;
+            int left = (int)floor(ox + cellLeft * scale + 0.5);
+            int right = (int)floor(ox + (cellLeft + ATTR_CELL_WIDTH) * scale + 0.5);
             int top = (int)floor(oy + (item->y + f.baselineRow - f.capHeight - 2) * scale + 0.5);
             int bottom = (int)floor(oy + (item->y + f.baselineRow + 3) * scale + 0.5);
-            AlphaBlend(hdc, left, top, right - left, bottom - top, colourDc, 0, 0, 1, 1, blend);
+            // The highlight fills the cell from the left in proportion to the value (20 = the whole cell)
+            int value = max(1, min(20, item->attrValue));
+            int fill = (int)floor((right - left) * value / 20.0 + 0.5);
+            if (fill > 0)
+                AlphaBlend(hdc, left, top, fill, bottom - top, colourDc, 0, 0, 1, 1, blend);
+
+            // Key attributes can also get an outline round the whole cell
+            if (key && g_attrBorder)
+            {
+                int penWidth = max(1, (int)(scale + 0.5));
+                HPEN borderPen = CreatePen(PS_SOLID, penWidth, g_attrBorderColour);
+                HGDIOBJ oldPen = SelectObject(hdc, borderPen);
+                HGDIOBJ oldBrush = SelectObject(hdc, GetStockObject(NULL_BRUSH));
+                Rectangle(hdc, left, top, right, bottom);
+                SelectObject(hdc, oldBrush);
+                SelectObject(hdc, oldPen);
+                DeleteObject(borderPen);
+            }
         }
 
         SelectObject(colourDc, oldBitmap);
@@ -1005,6 +1113,47 @@ void __cdecl Cm3_AfterStretch(HDC hdc, int dl, int dt, int dw, int dh, int scale
 
     RestoreDC(hdc, saved);
     LeaveCriticalSection(&g_lock);
+}
+
+// ---- double buffering ----
+// The stretch and our text are drawn into an off-screen bitmap and copied to the window/screen in one go, so there is
+// never a moment where the screen shows the stretched picture without its text (that was a flicker on every redraw).
+static HDC g_backDc = NULL;
+static HBITMAP g_backBitmap = NULL;
+static int g_backWidth = 0, g_backHeight = 0;
+
+// Returns an off-screen DC at least right x bottom pixels big to draw into instead of real, or NULL to draw directly
+HDC __cdecl Cm3_BeginBuffer(HDC real, int right, int bottom)
+{
+    if (!g_working || !real || right <= 0 || bottom <= 0 || right > 16384 || bottom > 16384)
+        return NULL;
+
+    if (!g_backDc)
+        g_backDc = CreateCompatibleDC(real);
+    if (!g_backDc)
+        return NULL;
+
+    if (!g_backBitmap || right > g_backWidth || bottom > g_backHeight)
+    {
+        int width = max(right, g_backWidth), height = max(bottom, g_backHeight);
+        HBITMAP bitmap = CreateCompatibleBitmap(real, width, height);
+        if (!bitmap)
+            return g_backBitmap ? g_backDc : NULL;
+        SelectObject(g_backDc, bitmap);         // this also deselects the old bitmap
+        if (g_backBitmap)
+            DeleteObject(g_backBitmap);
+        g_backBitmap = bitmap;
+        g_backWidth = width;
+        g_backHeight = height;
+    }
+    return g_backDc;
+}
+
+// The finished picture is in the off-screen DC: put it on the real one
+void __cdecl Cm3_EndBuffer(HDC real, HDC buffer, int x, int y, int w, int h)
+{
+    if (real && buffer)
+        BitBlt(real, x, y, w, h, buffer, x, y, SRCCOPY);
 }
 
 // The present is over: put the game's own soft text back on its surface, exactly as it was.

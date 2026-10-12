@@ -30,8 +30,13 @@ namespace CM3ResolutionPatcher
         CheckBox checkBoxModernText;
         ComboBox comboBoxTextFont;
         CheckBox checkBoxAttributes;
-        CheckBox checkBoxRoleAware;
+        ComboBox comboBoxHighlightMode;
         NumericUpDown numericHighlightFrom;
+        Button buttonKeyColour;
+        Button buttonSecondaryColour;
+        Button buttonOtherColour;
+        CheckBox checkBoxBorder;
+        Button buttonBorderColour;
         CheckBox checkBoxButtonFix;
         NumericUpDown numericButtonDelay;
         CheckBox checkBoxBackup;
@@ -41,7 +46,7 @@ namespace CM3ResolutionPatcher
         public MainForm()
         {
             Text = "Scottapotamus CM3 Patcher";
-            ClientSize = new Size(520, 478);
+            ClientSize = new Size(520, 642);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
@@ -57,90 +62,111 @@ namespace CM3ResolutionPatcher
             labelCurrent = new Label { Left = 12, Top = 66, Width = 496, Height = 18, Text = "" };
             Controls.Add(labelCurrent);
 
-            Controls.Add(new Label { Text = "Resolution (pick one or type WIDTHxHEIGHT):", Left = 12, Top = 94, AutoSize = true });
-            comboBoxResolution = new ComboBox { Left = 12, Top = 114, Width = 200, DropDownStyle = ComboBoxStyle.DropDown };
+            // ---- GFX fixes ----
+            GroupBox groupGfx = new GroupBox { Text = "GFX fixes", Left = 12, Top = 92, Width = 496, Height = 184 };
+            Controls.Add(groupGfx);
+
+            groupGfx.Controls.Add(new Label { Text = "Resolution (pick one or type WIDTHxHEIGHT):", Left = 12, Top = 22, AutoSize = true });
+            comboBoxResolution = new ComboBox { Left = 12, Top = 42, Width = 200, DropDownStyle = ComboBoxStyle.DropDown };
             comboBoxResolution.Items.AddRange(Presets);
             comboBoxResolution.Text = "1600x1200";
-            Controls.Add(comboBoxResolution);
+            groupGfx.Controls.Add(comboBoxResolution);
 
-            Controls.Add(new Label { Text = "Scaling:", Left = 224, Top = 117, AutoSize = true });
-            comboBoxScaling = new ComboBox { Left = 276, Top = 114, Width = 232, DropDownStyle = ComboBoxStyle.DropDownList };
+            groupGfx.Controls.Add(new Label { Text = "Scaling:", Left = 224, Top = 45, AutoSize = true });
+            comboBoxScaling = new ComboBox { Left = 276, Top = 42, Width = 208, DropDownStyle = ComboBoxStyle.DropDownList };
             comboBoxScaling.Items.AddRange(new object[] { "High quality (bicubic, smoothest)", "Crisp (sharper bicubic)", "Smooth (halftone)", "Sharp (blocky pixels)" });
             comboBoxScaling.SelectedIndex = 0;
-            Controls.Add(comboBoxScaling);
+            groupGfx.Controls.Add(comboBoxScaling);
 
-            Controls.Add(new Label { Text = "Font sharpening (tightens the soft edges of the game's text):", Left = 12, Top = 148, AutoSize = true });
-            comboBoxFonts = new ComboBox { Left = 12, Top = 168, Width = 200, DropDownStyle = ComboBoxStyle.DropDownList };
+            groupGfx.Controls.Add(new Label { Text = "Font sharpening (tightens the soft edges of the game's text):", Left = 12, Top = 74, AutoSize = true });
+            comboBoxFonts = new ComboBox { Left = 12, Top = 94, Width = 200, DropDownStyle = ComboBoxStyle.DropDownList };
             comboBoxFonts.Items.AddRange(new object[] { "Medium (recommended)", "Strong", "None (original fonts)" });
             comboBoxFonts.SelectedIndex = 0;
-            Controls.Add(comboBoxFonts);
-            labelFonts = new Label { Left = 224, Top = 171, Width = 284, Height = 18, Text = "" };
-            Controls.Add(labelFonts);
+            groupGfx.Controls.Add(comboBoxFonts);
+            labelFonts = new Label { Left = 224, Top = 97, Width = 260, Height = 18, Text = "" };
+            groupGfx.Controls.Add(labelFonts);
 
             checkBoxModernText = new CheckBox
             {
-                Text = "Modern text: draw all the game's text with a TrueType font at full resolution (experimental)",
-                Left = 12, Top = 204, AutoSize = true, Checked = false
+                Text = "Modern text: draw the game's text with a TrueType font at full resolution (experimental)",
+                Left = 12, Top = 126, AutoSize = true, Checked = false
             };
-            checkBoxModernText.CheckedChanged += delegate
-            {
-                comboBoxTextFont.Enabled = checkBoxModernText.Checked;
-                checkBoxAttributes.Enabled = checkBoxModernText.Checked;
-                numericHighlightFrom.Enabled = checkBoxModernText.Checked && checkBoxAttributes.Checked;
-                checkBoxRoleAware.Enabled = checkBoxModernText.Checked && checkBoxAttributes.Checked;
-            };
-            Controls.Add(checkBoxModernText);
+            checkBoxModernText.CheckedChanged += delegate { UpdateEnabled(); };
+            groupGfx.Controls.Add(checkBoxModernText);
 
-            Controls.Add(new Label { Text = "Text font:", Left = 32, Top = 232, AutoSize = true });
-            comboBoxTextFont = new ComboBox { Left = 100, Top = 228, Width = 200, DropDownStyle = ComboBoxStyle.DropDown, Enabled = false };
+            groupGfx.Controls.Add(new Label { Text = "Text font:", Left = 32, Top = 154, AutoSize = true });
+            comboBoxTextFont = new ComboBox { Left = 100, Top = 150, Width = 200, DropDownStyle = ComboBoxStyle.DropDown, Enabled = false };
             comboBoxTextFont.Items.AddRange(new object[] { "Segoe UI", "Arial", "Tahoma", "Verdana", "Calibri", "Trebuchet MS", "Bahnschrift" });
             comboBoxTextFont.Text = TextOverlayInstaller.DefaultFont;
-            Controls.Add(comboBoxTextFont);
+            groupGfx.Controls.Add(comboBoxTextFont);
 
-            checkBoxAttributes = new CheckBox
-            {
-                Text = "Colour player attributes by value and highlight the best (rated at or above:)",
-                Left = 32, Top = 258, AutoSize = true, Checked = true, Enabled = false
-            };
-            checkBoxAttributes.CheckedChanged += delegate
-            {
-                numericHighlightFrom.Enabled = checkBoxModernText.Checked && checkBoxAttributes.Checked;
-                checkBoxRoleAware.Enabled = checkBoxModernText.Checked && checkBoxAttributes.Checked;
-            };
-            Controls.Add(checkBoxAttributes);
-
-            numericHighlightFrom = new NumericUpDown { Left = 440, Top = 255, Width = 50, Minimum = 1, Maximum = 20, Value = TextOverlayInstaller.DefaultHighlightFrom, Enabled = false };
-            Controls.Add(numericHighlightFrom);
-
-            checkBoxRoleAware = new CheckBox
-            {
-                Text = "Only highlight the attributes that matter for the player's position (blue = key but weak)",
-                Left = 52, Top = 282, AutoSize = true, Checked = true, Enabled = false
-            };
-            Controls.Add(checkBoxRoleAware);
+            // ---- UI fixes ----
+            GroupBox groupUi = new GroupBox { Text = "UI fixes", Left = 12, Top = 284, Width = 496, Height = 80 };
+            Controls.Add(groupUi);
 
             checkBoxButtonFix = new CheckBox
             {
                 Text = "Fix over-fast + / - and scroll buttons (a short click currently repeats many times)",
-                Left = 12, Top = 314, AutoSize = true, Checked = true
+                Left = 12, Top = 20, AutoSize = true, Checked = true
             };
             checkBoxButtonFix.CheckedChanged += delegate { numericButtonDelay.Enabled = checkBoxButtonFix.Checked; };
-            Controls.Add(checkBoxButtonFix);
+            groupUi.Controls.Add(checkBoxButtonFix);
 
-            Controls.Add(new Label { Text = "Wait per step while a button is held (ms):", Left = 32, Top = 342, AutoSize = true });
-            numericButtonDelay = new NumericUpDown { Left = 270, Top = 338, Width = 60, Minimum = 10, Maximum = 500, Value = 60, Increment = 10 };
-            Controls.Add(numericButtonDelay);
+            groupUi.Controls.Add(new Label { Text = "Wait per step while a button is held (ms):", Left = 32, Top = 50, AutoSize = true });
+            numericButtonDelay = new NumericUpDown { Left = 270, Top = 46, Width = 60, Minimum = 10, Maximum = 500, Value = 60, Increment = 10 };
+            groupUi.Controls.Add(numericButtonDelay);
 
-            checkBoxBackup = new CheckBox { Text = "Make a backup of the original exe (cm3_original.exe) first", Left = 12, Top = 372, AutoSize = true, Checked = true };
+            // ---- Game enhancements (these are drawn by the modern text overlay, so they need it switched on) ----
+            GroupBox groupGame = new GroupBox { Text = "Game enhancements (need Modern text)", Left = 12, Top = 372, Width = 496, Height = 172 };
+            Controls.Add(groupGame);
+
+            checkBoxAttributes = new CheckBox
+            {
+                Text = "Highlight player attributes (the bar fills in proportion to the value)",
+                Left = 12, Top = 20, AutoSize = true, Checked = true, Enabled = false
+            };
+            checkBoxAttributes.CheckedChanged += delegate { UpdateEnabled(); };
+            groupGame.Controls.Add(checkBoxAttributes);
+
+            groupGame.Controls.Add(new Label { Text = "Colour them by:", Left = 32, Top = 50, AutoSize = true });
+            comboBoxHighlightMode = new ComboBox { Left = 130, Top = 46, Width = 350, DropDownStyle = ComboBoxStyle.DropDownList, Enabled = false };
+            comboBoxHighlightMode.Items.AddRange(new object[] {
+                "The player's position (key / secondary / other for that role)",
+                "The value (15+ key, 10-14 secondary, below 10 other)" });
+            comboBoxHighlightMode.SelectedIndex = 1;
+            comboBoxHighlightMode.SelectedIndexChanged += delegate { UpdateEnabled(); };
+            groupGame.Controls.Add(comboBoxHighlightMode);
+
+            groupGame.Controls.Add(new Label { Text = "If the position isn't known, highlight values at or above:", Left = 32, Top = 78, AutoSize = true });
+            numericHighlightFrom = new NumericUpDown { Left = 340, Top = 74, Width = 50, Minimum = 1, Maximum = 20, Value = TextOverlayInstaller.DefaultHighlightFrom, Enabled = false };
+            groupGame.Controls.Add(numericHighlightFrom);
+
+            groupGame.Controls.Add(new Label { Text = "Highlight colours - key:", Left = 32, Top = 108, AutoSize = true });
+            buttonKeyColour = MakeColourButton(158, 104, TextOverlayInstaller.DefaultKeyColour);
+            groupGame.Controls.Add(buttonKeyColour);
+            groupGame.Controls.Add(new Label { Text = "secondary:", Left = 226, Top = 108, AutoSize = true });
+            buttonSecondaryColour = MakeColourButton(292, 104, TextOverlayInstaller.DefaultSecondaryColour);
+            groupGame.Controls.Add(buttonSecondaryColour);
+            groupGame.Controls.Add(new Label { Text = "other:", Left = 360, Top = 108, AutoSize = true });
+            buttonOtherColour = MakeColourButton(404, 104, TextOverlayInstaller.DefaultOtherColour);
+            groupGame.Controls.Add(buttonOtherColour);
+
+            checkBoxBorder = new CheckBox { Text = "Outline the key attributes - colour:", Left = 32, Top = 138, AutoSize = true, Checked = false, Enabled = false };
+            checkBoxBorder.CheckedChanged += delegate { UpdateEnabled(); };
+            groupGame.Controls.Add(checkBoxBorder);
+            buttonBorderColour = MakeColourButton(260, 136, TextOverlayInstaller.DefaultBorderColour);
+            groupGame.Controls.Add(buttonBorderColour);
+
+            checkBoxBackup = new CheckBox { Text = "Make a backup of the original exe (cm3_original.exe) first", Left = 12, Top = 554, AutoSize = true, Checked = false };
             Controls.Add(checkBoxBackup);
 
-            buttonPatch = new Button { Text = "Apply", Left = 12, Top = 406, Width = 140, Height = 28 };
+            buttonPatch = new Button { Text = "Apply", Left = 12, Top = 586, Width = 140, Height = 28 };
             buttonPatch.Click += buttonPatch_Click;
             Controls.Add(buttonPatch);
 
             labelNote = new Label
             {
-                Left = 164, Top = 402, Width = 344, Height = 66,
+                Left = 164, Top = 582, Width = 344, Height = 52,
                 Text = "CM3 is a 4:3 game: other shapes get black bars at the sides. " +
                        "Windowed mode needs a screen taller than the chosen height. Choose 800x600 to restore the original."
             };
@@ -173,6 +199,35 @@ namespace CM3ResolutionPatcher
                 if (dialog.ShowDialog(this) == DialogResult.OK)
                     textBoxFile.Text = dialog.FileName;
             }
+        }
+
+        // A small button showing a colour; clicking it opens the colour picker
+        Button MakeColourButton(int left, int top, Color colour)
+        {
+            Button button = new Button { Left = left, Top = top, Width = 60, Height = 22, BackColor = colour, FlatStyle = FlatStyle.Flat, Enabled = false };
+            button.Click += delegate
+            {
+                using (ColorDialog dialog = new ColorDialog { Color = button.BackColor, FullOpen = true })
+                    if (dialog.ShowDialog(this) == DialogResult.OK)
+                        button.BackColor = dialog.Color;
+            };
+            return button;
+        }
+
+        // The game enhancements are drawn by the modern text overlay, and each option depends on the ones above it
+        void UpdateEnabled()
+        {
+            bool modern = checkBoxModernText.Checked;
+            bool attributes = modern && checkBoxAttributes.Checked;
+            comboBoxTextFont.Enabled = modern;
+            checkBoxAttributes.Enabled = modern;
+            comboBoxHighlightMode.Enabled = attributes;
+            numericHighlightFrom.Enabled = attributes && comboBoxHighlightMode.SelectedIndex == 0;
+            buttonKeyColour.Enabled = attributes;
+            buttonSecondaryColour.Enabled = attributes;
+            buttonOtherColour.Enabled = attributes;
+            checkBoxBorder.Enabled = attributes;
+            buttonBorderColour.Enabled = attributes && checkBoxBorder.Checked;
         }
 
         void RefreshCurrent()
@@ -213,7 +268,12 @@ namespace CM3ResolutionPatcher
                     comboBoxTextFont.Text = TextOverlayInstaller.ReadFont(gameFolder);
                     checkBoxAttributes.Checked = TextOverlayInstaller.ReadHighlightAttributes(gameFolder);
                     numericHighlightFrom.Value = TextOverlayInstaller.ReadHighlightFrom(gameFolder);
-                    checkBoxRoleAware.Checked = TextOverlayInstaller.ReadRoleAware(gameFolder);
+                    comboBoxHighlightMode.SelectedIndex = TextOverlayInstaller.ReadByValue(gameFolder) ? 1 : 0;
+                    checkBoxBorder.Checked = TextOverlayInstaller.ReadBorder(gameFolder);
+                    buttonKeyColour.BackColor = TextOverlayInstaller.ReadKeyColour(gameFolder);
+                    buttonSecondaryColour.BackColor = TextOverlayInstaller.ReadSecondaryColour(gameFolder);
+                    buttonOtherColour.BackColor = TextOverlayInstaller.ReadOtherColour(gameFolder);
+                    buttonBorderColour.BackColor = TextOverlayInstaller.ReadBorderColour(gameFolder);
                 }
             }
             catch (Exception ex)
@@ -281,7 +341,7 @@ namespace CM3ResolutionPatcher
 
                 string gameFolder = Path.GetDirectoryName(file);
                 if (modernText)
-                    TextOverlayInstaller.Install(gameFolder, comboBoxTextFont.Text.Trim(), checkBoxAttributes.Checked, (int)numericHighlightFrom.Value, checkBoxRoleAware.Checked);
+                    TextOverlayInstaller.Install(gameFolder, comboBoxTextFont.Text.Trim(), checkBoxAttributes.Checked, (int)numericHighlightFrom.Value, comboBoxHighlightMode.SelectedIndex == 1, checkBoxBorder.Checked, buttonKeyColour.BackColor, buttonSecondaryColour.BackColor, buttonOtherColour.BackColor, buttonBorderColour.BackColor);
                 else
                     TextOverlayInstaller.Remove(gameFolder);
 

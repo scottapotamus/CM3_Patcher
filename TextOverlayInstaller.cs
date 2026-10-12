@@ -1,4 +1,5 @@
 using System;
+using System.Drawing;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
@@ -14,10 +15,14 @@ namespace CM3ResolutionPatcher
         public const string IniName = "cm3text.ini";
         public const string DefaultFont = "Segoe UI";
         public const int DefaultHighlightFrom = 13;
+        public static readonly Color DefaultKeyColour = Color.FromArgb(187, 68, 68);
+        public static readonly Color DefaultBorderColour = Color.FromArgb(235, 205, 90);
+        public static readonly Color DefaultSecondaryColour = Color.FromArgb(55, 185, 40);
+        public static readonly Color DefaultOtherColour = Color.FromArgb(102, 102, 102);
 
         // fontFace: the font for all text. highlightAttributes: colour player attributes by value and put a bar behind the
         // best ones (those at or above highlightFrom).
-        public static void Install(string gameFolder, string fontFace, bool highlightAttributes, int highlightFrom, bool roleAware)
+        public static void Install(string gameFolder, string fontFace, bool highlightAttributes, int highlightFrom, bool byValue, bool border, Color keyColour, Color secondaryColour, Color otherColour, Color borderColour)
         {
             string dllPath = Path.Combine(gameFolder, DllName);
 
@@ -49,7 +54,12 @@ namespace CM3ResolutionPatcher
             SetValue(iniPath, "text", "titlefont", fontFace);
             SetValue(iniPath, "attributes", "enabled", highlightAttributes ? "1" : "0");
             SetValue(iniPath, "attributes", "highlightfrom", highlightFrom.ToString());
-            SetValue(iniPath, "attributes", "roleaware", roleAware ? "1" : "0");
+            SetValue(iniPath, "attributes", "mode", byValue ? "value" : "position");
+            SetValue(iniPath, "attributes", "border", border ? "1" : "0");
+            SetValue(iniPath, "attributes", "keycolour", ToHex(keyColour));
+            SetValue(iniPath, "attributes", "secondarycolour", ToHex(secondaryColour));
+            SetValue(iniPath, "attributes", "othercolour", ToHex(otherColour));
+            SetValue(iniPath, "attributes", "bordercolour", ToHex(borderColour));
         }
 
         // Removes the DLL (the settings file is kept in case the overlay is switched back on later)
@@ -81,10 +91,17 @@ namespace CM3ResolutionPatcher
             return value == null || value != "0";
         }
 
-        public static bool ReadRoleAware(string gameFolder)
+        // True if highlights are coloured by value, false if by the player's position
+        public static bool ReadByValue(string gameFolder)
         {
-            string value = GetValue(Path.Combine(gameFolder, IniName), "attributes", "roleaware");
-            return value == null || value != "0";
+            string value = GetValue(Path.Combine(gameFolder, IniName), "attributes", "mode");
+            return value == null || value.Trim().ToLowerInvariant() != "position";
+        }
+
+        public static bool ReadBorder(string gameFolder)
+        {
+            string value = GetValue(Path.Combine(gameFolder, IniName), "attributes", "border");
+            return value == "1";
         }
 
         public static int ReadHighlightFrom(string gameFolder)
@@ -93,6 +110,28 @@ namespace CM3ResolutionPatcher
             string value = GetValue(Path.Combine(gameFolder, IniName), "attributes", "highlightfrom");
             return (value != null && int.TryParse(value, out result) && result >= 1 && result <= 20) ? result : DefaultHighlightFrom;
         }
+
+        static string ToHex(Color c)
+        {
+            return c.R.ToString("X2") + c.G.ToString("X2") + c.B.ToString("X2");
+        }
+
+        static Color ReadColour(string gameFolder, string key, Color fallback)
+        {
+            int rgb;
+            string value = GetValue(Path.Combine(gameFolder, IniName), "attributes", key);
+            if (value != null && value.Length == 6 && int.TryParse(value, System.Globalization.NumberStyles.HexNumber, null, out rgb))
+                return Color.FromArgb((rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255);
+            return fallback;
+        }
+
+        public static Color ReadKeyColour(string gameFolder) { return ReadColour(gameFolder, "keycolour", DefaultKeyColour); }
+
+        public static Color ReadOtherColour(string gameFolder) { return ReadColour(gameFolder, "othercolour", DefaultOtherColour); }
+
+        public static Color ReadBorderColour(string gameFolder) { return ReadColour(gameFolder, "bordercolour", DefaultBorderColour); }
+
+        public static Color ReadSecondaryColour(string gameFolder) { return ReadColour(gameFolder, "secondarycolour", DefaultSecondaryColour); }
 
         // ---- a tiny ini reader/writer that keeps everything else in the file (other settings, comments) as it was ----
 

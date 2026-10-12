@@ -45,7 +45,7 @@
     <Compile Include="TextOverlayInstaller.cs" />
   </ItemGroup>
   <ItemGroup>
-    <!-- Built by TextOverlayuild.bat (needs the Visual Studio C++ build tools); the built DLL is checked in -->
+    <!-- Built by TextOverlay\build.bat (needs the Visual Studio C++ build tools); the built DLL is checked in -->
     <EmbeddedResource Include="TextOverlay\cm3text.dll">
       <LogicalName>cm3text.dll</LogicalName>
     </EmbeddedResource>

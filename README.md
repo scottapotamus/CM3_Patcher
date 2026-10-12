@@ -76,39 +76,59 @@ Needs one of the GDI+ scaling modes (it is switched on automatically). Not avail
 
 ### Player attribute highlighting
 
-On the player profile screen (and anywhere the game lists the 31 attributes) the overlay colours each value by how
-good it is - dim for poor (1-4), grey (5-8), yellow (9-12), light green (13-15), bright green (16-20) - and puts a bar
-behind the row, a bit like Football Manager's attribute view.
+On the player profile screen (and anywhere the game lists the 31 attributes) the overlay puts a highlight behind the value, a
+bit like Football Manager's attribute view. The values keep the game's own text colours.
 
-By default the bars are **position aware**: the overlay reads the position label the game draws on the profile
-("Goalkeeper", "Defender (Right)", "Defender/Midfielder (Right/Centre)", ...) and highlights only the attributes that
-matter for that role: **green** if the value is at or above the threshold (13 by default), **blue** if it is a key
-attribute but weak. Attributes that don't matter for the position get no bar. Key attributes per role (editable in
-`cm3text.cpp`, `ROLES`):
+By default every attribute is coloured by its **value**: above 14 in the **key** colour (red by default), 10-14 in the
+**secondary** colour (green) and below 10 in the **other** colour (grey). The highlight fills the game's value cell in
+proportion to the value (20 = the whole cell, 10 = half), and the key ones can also get an outline round the cell (off by
+default). All the colours are configurable in the patcher.
 
-| Role | Key attributes |
-| --- | --- |
-| Goalkeeper | Handling, Reflexes, Positioning, Agility, Anticipation, Bravery |
-| Sweeper | Positioning, Anticipation, Tackling, Marking, Heading, Passing |
-| Defender | Tackling, Marking, Positioning, Anticipation, Bravery; centre: Heading, Jumping, Strength; wide (Right/Left): Pace, Acceleration, Stamina, Crossing |
-| Defensive Midfielder | Tackling, Positioning, Anticipation, Teamwork, Work Rate, Stamina, Passing, Marking |
-| Midfielder | Passing, Technique, Teamwork, Work Rate, Stamina, Creativity, Positioning; wide: Pace, Crossing, Dribbling, Acceleration |
-| Attacking Midfielder | Creativity, Passing, Technique, Flair, Dribbling, Off The Ball, Shooting; wide: Pace, Crossing, Acceleration |
-| Striker | Shooting, Off The Ball, Heading, Pace, Acceleration, Technique, Strength, Dribbling |
+Or choose to colour them by the **player's position** instead: the overlay reads the position label the game draws on
+the profile ("Goalkeeper", "Defender (Right)", "Defender/Midfielder (Right/Centre)", ...) and colours every attribute by
+what it means for that role: **key** attributes (red by default), **secondary** ones (green) and all the **other** attributes
+(grey). All three colours are configurable in the patcher. The highlight fills the game's value cell in proportion to the
+value (20 = the whole cell, 10 = half), and key attributes can also get an outline round the cell (off by default,
+colour configurable). If the position isn't recognised, only the player's best attributes (at or above a threshold,
+13 by default) are highlighted, in the key colour. The tiers are editable in
+`cm3text.cpp`, `ROLES` (names are the game's own: "Off The Ball" is movement, "Shooting" covers finishing and long shots,
+"Set Pieces" is free kicks):
+
+| Role | Key | Secondary (plus Determination) |
+| --- | --- | --- |
+| Goalkeeper | Anticipation, Handling | Acceleration, Agility, Jumping, Pace, Passing, Positioning, Reflexes, Strength |
+| Sweeper | Marking, Passing, Tackling | Heading, Jumping, Pace, Positioning, Stamina, Strength |
+| Defender (centre) | Marking, Tackling | Heading, Jumping, Pace, Positioning, Stamina, Strength |
+| Defender (Right/Left) | Acceleration, Agility, Dribbling, Marking, Passing | Heading, Jumping, Pace, Positioning, Stamina, Strength |
+| Defensive Midfielder | Marking, Passing, Tackling | Acceleration, Heading, Jumping, Pace, Stamina, Strength, Teamwork |
+| Midfielder (centre) | Anticipation, Balance, Dribbling, Flair, Passing, Stamina, Technique | Acceleration, Heading, Jumping, Pace, Strength, Teamwork |
+| Midfielder (Right/Left) | Midfielder and Winger combined | Midfielder and Winger combined |
+| Attacking Midfielder (any side) | Dribbling, Flair, Shooting, Off The Ball, Passing | Acceleration, Heading, Jumping, Pace, Stamina, Strength, Teamwork |
+| Attacker (Right/Left) | Acceleration, Agility, Crossing, Dribbling, Pace | Flair, Heading, Jumping, Stamina, Strength, Teamwork |
+| Forward (Right/Left) | Winger and Striker combined | Winger and Striker combined |
+| Striker (and Forward/Attacker in the centre) | Shooting, Pace | Crossing, Dribbling, Flair, Set Pieces, Heading, Jumping, Off The Ball, Passing |
 
 A player with several roles or sides (e.g. "Defender/Midfielder (Right/Centre)") gets the union. If the label isn't
-recognised (or `roleaware=0`) the bars simply go on his best attributes. It matches English text only. Settings (the
-patcher writes them for you):
+recognised the bars simply go on his best attributes. It matches English text only. Settings (the patcher writes them
+for you):
 
 ```
 [attributes]
 enabled=1
-; 1 = highlight what matters for the position, 0 = just the best attributes
-roleaware=1
-; a value at or above this is "strong" (green bar)
+; position = colour by what matters for the player's position, value = colour by the value (15+ key, 10-14 secondary, below 10 other)
+mode=value
+; used only when the position isn't known: highlight values at or above this
 highlightfrom=13
 ; bar opacity, 0-255
 alpha=130
+; highlight colours as RRGGBB hex (the patcher has colour pickers)
+keycolour=BB4444
+secondarycolour=37B928
+othercolour=666666
+; 1 = outline the key attributes' cells, 0 = no outline
+border=0
+; outline colour
+bordercolour=EBCD5A
 ```
 
 ## + / - and scroll buttons repeating too fast

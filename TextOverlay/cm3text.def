@@ -6,3 +6,5 @@ EXPORTS
     Cm3_BeforeStretch
     Cm3_AfterStretch
     Cm3_Rebake
+    Cm3_BeginBuffer
+    Cm3_EndBuffer

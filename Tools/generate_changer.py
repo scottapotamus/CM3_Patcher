@@ -12,7 +12,8 @@ STRINGS = ['gdi32.dll', 'StretchBlt', 'SetStretchBltMode', 'SetBrushOrgEx', 'use
            'gdiplus.dll', 'GdiplusStartup', 'GdipCreateFromHDC', 'GdipSetInterpolationMode', 'GdipSetCompositingMode',
            'GdipCreateBitmapFromScan0', 'GdipDrawImageRectRectI', 'GdipDeleteGraphics', 'GdipDisposeImage',
            'GdipCreateImageAttributes', 'GdipSetImageAttributesWrapMode', 'GdipGetImageGraphicsContext', 'GdipSetPixelOffsetMode',
-           'cm3text.dll', 'Cm3_Init', 'Cm3_PreDraw', 'Cm3_PostDraw', 'Cm3_BeforeStretch', 'Cm3_AfterStretch', 'Cm3_Rebake']
+           'cm3text.dll', 'Cm3_Init', 'Cm3_PreDraw', 'Cm3_PostDraw', 'Cm3_BeforeStretch', 'Cm3_AfterStretch', 'Cm3_Rebake',
+           'Cm3_BeginBuffer', 'Cm3_EndBuffer']
 STR_BASE, STR_SLOT = 0x200, 0x20
 def S_(name): return STR_BASE + STR_SLOT * STRINGS.index(name)
 
@@ -21,12 +22,13 @@ PTR = dict(StretchBlt=0x00, SetStretchBltMode=0x04, SetBrushOrgEx=0x08, GetDC=0x
            GdipCreateBitmapFromScan0=0x24, GdipDrawImageRectRectI=0x28, GdipDeleteGraphics=0x2C, GdipDisposeImage=0x30,
            GdipCreateImageAttributes=0x34, GdipSetImageAttributesWrapMode=0x38,
            GdipGetImageGraphicsContext=0x3C, GdipSetPixelOffsetMode=0x40,
-           DllInit=0x44, DllPre=0x48, DllPost=0x4C, DllState=0x50, DllBefore=0x54, DllAfter=0x58, DllRebake=0x5C, DllSaved=0x60)
+           DllInit=0x44, DllPre=0x48, DllPost=0x4C, DllState=0x50, DllBefore=0x54, DllAfter=0x58, DllRebake=0x5C, DllSaved=0x60, DllBegin=0x64, DllEnd=0x68)
 V_SRCDC, V_DSTDC = 0x80, 0x84
 V_DX, V_DY, V_DW, V_DH, V_SX, V_SY, V_SW, V_SH = 0x88, 0x8C, 0x90, 0x94, 0x98, 0x9C, 0xA0, 0xA4
 V_TOKEN, V_GFX, V_BMP, V_ATTR, V_STATUS, V_SINPUT, V_DESC = 0xA8, 0xAC, 0xB0, 0xB4, 0xB8, 0xC0, 0x100
 V_BMP2, V_GFX2, V_W2, V_H2 = 0xD0, 0xD4, 0xD8, 0xDC
 V_RL, V_RT, V_RR, V_RB = 0xE0, 0xE4, 0xE8, 0xEC
+V_REALDC = 0xF0
 
 
 def h(n):
@@ -152,6 +154,24 @@ fullscreen:
     push ecx
     call dword ptr [edx+0x44]
 gotdst:
+    mov dword ptr [ebx+%(realdc)s], 0
+    cmp dword ptr [ebx+%(dllstate)s], 1
+    jne nobuf
+    mov eax, [ebx+%(dh)s]
+    add eax, [ebx+%(dy)s]
+    push eax
+    mov eax, [ebx+%(dw)s]
+    add eax, [ebx+%(dx)s]
+    push eax
+    push dword ptr [ebx+%(dstdc)s]
+    call dword ptr [ebx+%(dllbegin)s]
+    add esp, 12
+    test eax, eax
+    jz nobuf
+    mov ecx, [ebx+%(dstdc)s]
+    mov [ebx+%(realdc)s], ecx
+    mov [ebx+%(dstdc)s], eax
+nobuf:
     mov eax, {SM}
     cmp eax, 2
     jb halftone
@@ -358,6 +378,21 @@ relall:
     call dword ptr [ebx+%(dllafter)s]
     add esp, 32
 nooverlay:
+    mov eax, [ebx+%(realdc)s]
+    test eax, eax
+    jz norestore
+    push dword ptr [ebx+%(dh)s]
+    push dword ptr [ebx+%(dw)s]
+    push dword ptr [ebx+%(dy)s]
+    push dword ptr [ebx+%(dx)s]
+    push dword ptr [ebx+%(dstdc)s]
+    push eax
+    call dword ptr [ebx+%(dllend)s]
+    add esp, 24
+    mov eax, [ebx+%(realdc)s]
+    mov [ebx+%(dstdc)s], eax
+    mov dword ptr [ebx+%(realdc)s], 0
+norestore:
     cmp dword ptr [0x83b7e4], 0
     jne relfull
     push dword ptr [ebx+%(dstdc)s]
@@ -388,7 +423,8 @@ skiprebake:
            srcdc=h(V_SRCDC), setmode=h(PTR['SetStretchBltMode']), brush=h(PTR['SetBrushOrgEx']), stretch=h(PTR['StretchBlt']),
            reldc=h(PTR['ReleaseDC']), w2=h(V_W2), h2=h(V_H2), bmp2=h(V_BMP2), gfx2=h(V_GFX2),
            getgfx=h(PTR['GdipGetImageGraphicsContext']), setpixoff=h(PTR['GdipSetPixelOffsetMode']),
-           dllstate=h(PTR['DllState']), dllafter=h(PTR['DllAfter']), dllrebake=h(PTR['DllRebake'])))
+           dllstate=h(PTR['DllState']), dllafter=h(PTR['DllAfter']), dllrebake=h(PTR['DllRebake']),
+           realdc=h(V_REALDC), dllbegin=h(PTR['DllBegin']), dllend=h(PTR['DllEnd'])))
     return ''.join(L)
 
 
@@ -419,7 +455,7 @@ start:
     mov [ebx+%%(p%s)s], eax
     test eax, eax
     jz loadfail
-""" % (n, n) for n in ('init', 'pre', 'post', 'before', 'after', 'rebake')) + """    call dword ptr [ebx+%(pinit)s]
+""" % (n, n) for n in ('init', 'pre', 'post', 'before', 'after', 'rebake', 'begin', 'end')) + """    call dword ptr [ebx+%(pinit)s]
     test eax, eax
     jz loadfail
     mov dword ptr [ebx+%(state)s], 1
@@ -440,7 +476,8 @@ original:
     sub esp, 0xd0
 """) % dict(state=h(PTR['DllState']), sdll=h(S_('cm3text.dll')), sinit=h(S_('Cm3_Init')), spre=h(S_('Cm3_PreDraw')),
            spost=h(S_('Cm3_PostDraw')), sbefore=h(S_('Cm3_BeforeStretch')), safter=h(S_('Cm3_AfterStretch')),
-           srebake=h(S_('Cm3_Rebake')), pinit=h(PTR['DllInit']), ppre=h(PTR['DllPre']), ppost=h(PTR['DllPost']),
+           srebake=h(S_('Cm3_Rebake')), sbegin=h(S_('Cm3_BeginBuffer')), send=h(S_('Cm3_EndBuffer')),
+           pbegin=h(PTR['DllBegin']), pend=h(PTR['DllEnd']), pinit=h(PTR['DllInit']), ppre=h(PTR['DllPre']), ppost=h(PTR['DllPost']),
            pbefore=h(PTR['DllBefore']), pafter=h(PTR['DllAfter']), prebake=h(PTR['DllRebake']), saved=h(PTR['DllSaved']))
 
 
