@@ -143,6 +143,72 @@ namespace CM3ResolutionPatcher
         const int ToggleOffset = 0x132E6F;
         static readonly byte[] ToggleOriginal = FromHex("8BAC24C00000008B9C24BC000000");
 
+        // Optional: the substitutes rules. Every competition's rules word (bits 0-3 = substitutes named, bits 4-7 = substitutes
+        // that may be used) is packed by three blocks of code that read the two per-competition bytes [obj+0x33] / [obj+0x34].
+        // Replacing those six 3-byte reads (mov r8,[obj+disp]) with "mov r8,imm8 / nop" gives every competition the same rules.
+        // The game's team selection and match engine hold 20 players per team (11 + 9), so 9 is the most that can be named.
+        public const int MaxSubstitutes = 9;
+
+        class SubSite
+        {
+            public int Offset;
+            public byte[] Original;
+            public byte MovOpcode;      // mov al/cl/dl/bl, imm8
+            public bool Named;          // true: the number named on the bench, false: the number that may be used
+
+            public SubSite(int offset, string originalHex, byte movOpcode, bool named)
+            {
+                Offset = offset;
+                Original = FromHex(originalHex);
+                MovOpcode = movOpcode;
+                Named = named;
+            }
+        }
+
+        static readonly SubSite[] SubSites = {
+            new SubSite(0x19963F, "8A4633", 0xB0, true),        // league: mov al,[esi+33h]
+            new SubSite(0x199646, "8A5634", 0xB2, false),       //         mov dl,[esi+34h]
+            new SubSite(0x0A4B60, "8A4D33", 0xB1, true),        // cup:    mov cl,[ebp+33h]
+            new SubSite(0x0A4B72, "8A5D34", 0xB3, false),       //         mov bl,[ebp+34h]
+            new SubSite(0x0A57D2, "8A4E33", 0xB1, true),        // cup:    mov cl,[esi+33h]
+            new SubSite(0x0A57E8, "8A5634", 0xB2, false),       //         mov dl,[esi+34h]
+        };
+
+        // 0 = leave the game's own rules for that number
+        static void WriteSubstitutes(byte[] exe, int named, int used)
+        {
+            foreach (SubSite site in SubSites)
+            {
+                int value = site.Named ? named : used;
+                if (value > 0)
+                {
+                    exe[site.Offset] = site.MovOpcode;
+                    exe[site.Offset + 1] = (byte)value;
+                    exe[site.Offset + 2] = 0x90;
+                }
+                else
+                    Array.Copy(site.Original, 0, exe, site.Offset, site.Original.Length);
+            }
+        }
+
+        // The substitutes rules the exe is patched with (0 = the game's own rules)
+        public static void GetSubstitutes(string fileName, out int named, out int used)
+        {
+            named = used = 0;
+            byte[] exe = File.ReadAllBytes(fileName);
+            if (!IsSupported(exe))
+                return;
+            foreach (SubSite site in SubSites)
+            {
+                if (exe[site.Offset] != site.MovOpcode)
+                    continue;
+                if (site.Named)
+                    named = exe[site.Offset + 1];
+                else
+                    used = exe[site.Offset + 1];
+            }
+        }
+
         public static void GetResolution(string fileName, out int width, out int height)
         {
             width = SourceWidth;
@@ -200,6 +266,17 @@ namespace CM3ResolutionPatcher
         //   buttonRepeatDelayMs : 0 = off, otherwise how long (ms) the game waits per pass while a mouse button is held
         public static void Apply(string fileName, int width, int height, Smoothing smoothing, bool textOverlay, int buttonRepeatDelayMs)
         {
+            int named, used;
+            GetSubstitutes(fileName, out named, out used);
+            Apply(fileName, width, height, smoothing, textOverlay, buttonRepeatDelayMs, named, used);
+        }
+
+        //   substitutesNamed / substitutesUsed : 0 = the game's own rules, otherwise 1-9 for every competition
+        public static void Apply(string fileName, int width, int height, Smoothing smoothing, bool textOverlay, int buttonRepeatDelayMs, int substitutesNamed, int substitutesUsed)
+        {
+            if (substitutesNamed < 0 || substitutesNamed > MaxSubstitutes || substitutesUsed < 0 || substitutesUsed > MaxSubstitutes)
+                throw new ArgumentException("The substitutes must be between 0 and " + MaxSubstitutes);
+
             if (buttonRepeatDelayMs < 0 || buttonRepeatDelayMs > 1000)
                 throw new ArgumentException("The button repeat delay must be between 0 and 1000 ms");
 
@@ -220,6 +297,7 @@ namespace CM3ResolutionPatcher
             if (!changeResolution && buttonRepeatDelayMs == 0)
             {
                 Revert(exe);
+                WriteSubstitutes(exe, substitutesNamed, substitutesUsed);
                 File.WriteAllBytes(fileName, exe);
                 return;
             }
@@ -319,6 +397,7 @@ namespace CM3ResolutionPatcher
             else
                 Array.Copy(ToggleOriginal, 0, exe, ToggleOffset, ToggleOriginal.Length);
 
+            WriteSubstitutes(exe, substitutesNamed, substitutesUsed);
             File.WriteAllBytes(fileName, exe);
         }
 
@@ -374,6 +453,7 @@ namespace CM3ResolutionPatcher
                 Array.Copy(hook.Original, 0, exe, hook.Offset, hook.Original.Length);
             Array.Copy(HeldHook.Original, 0, exe, HeldHook.Offset, HeldHook.Original.Length);
             Array.Copy(ToggleOriginal, 0, exe, ToggleOffset, ToggleOriginal.Length);
+            WriteSubstitutes(exe, 0, 0);
         }
 
         // Every patch site must either be untouched or already one of ours
@@ -399,6 +479,9 @@ namespace CM3ResolutionPatcher
                     return false;
             if (!(Matches(exe, HeldHook.Offset, HeldHook.Original) || exe[HeldHook.Offset] == 0xE9))
                 return false;
+            foreach (SubSite site in SubSites)
+                if (!(Matches(exe, site.Offset, site.Original) || (exe[site.Offset] == site.MovOpcode && exe[site.Offset + 2] == 0x90)))
+                    return false;
             return Matches(exe, ToggleOffset, ToggleOriginal) || exe[ToggleOffset] == 0xBD;
         }
 

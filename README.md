@@ -131,6 +131,17 @@ border=0
 bordercolour=EBCD5A
 ```
 
+## Substitutes rules
+
+CM3 allows 5 players on the bench (some leagues 7) and 3 substitutions, set per competition in the game's code. The
+patcher can give **every competition** modern rules instead: up to **9 named** on the bench and up to **9 substitutions**
+(the defaults it offers are 9 and 5). It replaces the six places in `cm3.exe` where the rules are read (three code
+blocks that build every league's and cup's rules) with fixed numbers; choosing "off" or 800x600 with nothing else
+selected puts the original bytes back. 9 is the maximum because the game holds 20 players per team (11 + 9).
+
+The rules are stored in each fixture when it is created, so the change applies to **new games** (and fixtures created
+after loading), not to matches already in a saved game's fixture list.
+
 ## + / - and scroll buttons repeating too fast
 
 On a modern PC, a short click on a repeating button (the + / - buttons for transfers and contracts, the scroll arrows

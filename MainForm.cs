@@ -39,6 +39,9 @@ namespace CM3ResolutionPatcher
         Button buttonBorderColour;
         CheckBox checkBoxButtonFix;
         NumericUpDown numericButtonDelay;
+        CheckBox checkBoxSubs;
+        NumericUpDown numericSubsNamed;
+        NumericUpDown numericSubsUsed;
         CheckBox checkBoxBackup;
         Button buttonPatch;
         Label labelNote;
@@ -46,7 +49,7 @@ namespace CM3ResolutionPatcher
         public MainForm()
         {
             Text = "Scottapotamus CM3 Patcher";
-            ClientSize = new Size(520, 642);
+            ClientSize = new Size(520, 726);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
@@ -116,8 +119,27 @@ namespace CM3ResolutionPatcher
             numericButtonDelay = new NumericUpDown { Left = 270, Top = 46, Width = 60, Minimum = 10, Maximum = 500, Value = 60, Increment = 10 };
             groupUi.Controls.Add(numericButtonDelay);
 
+            // ---- Game rules ----
+            GroupBox groupRules = new GroupBox { Text = "Game rules", Left = 12, Top = 372, Width = 496, Height = 76 };
+            Controls.Add(groupRules);
+
+            checkBoxSubs = new CheckBox
+            {
+                Text = "Modern substitutes rules, for every competition (new games only)",
+                Left = 12, Top = 20, AutoSize = true, Checked = false
+            };
+            checkBoxSubs.CheckedChanged += delegate { numericSubsNamed.Enabled = numericSubsUsed.Enabled = checkBoxSubs.Checked; };
+            groupRules.Controls.Add(checkBoxSubs);
+
+            groupRules.Controls.Add(new Label { Text = "Named on the bench:", Left = 32, Top = 50, AutoSize = true });
+            numericSubsNamed = new NumericUpDown { Left = 150, Top = 46, Width = 50, Minimum = 1, Maximum = CM3ResolutionChanger.MaxSubstitutes, Value = 9, Enabled = false };
+            groupRules.Controls.Add(numericSubsNamed);
+            groupRules.Controls.Add(new Label { Text = "Substitutions allowed:", Left = 236, Top = 50, AutoSize = true });
+            numericSubsUsed = new NumericUpDown { Left = 370, Top = 46, Width = 50, Minimum = 1, Maximum = CM3ResolutionChanger.MaxSubstitutes, Value = 5, Enabled = false };
+            groupRules.Controls.Add(numericSubsUsed);
+
             // ---- Game enhancements (these are drawn by the modern text overlay, so they need it switched on) ----
-            GroupBox groupGame = new GroupBox { Text = "Game enhancements (need Modern text)", Left = 12, Top = 372, Width = 496, Height = 172 };
+            GroupBox groupGame = new GroupBox { Text = "Game enhancements (need Modern text)", Left = 12, Top = 456, Width = 496, Height = 172 };
             Controls.Add(groupGame);
 
             checkBoxAttributes = new CheckBox
@@ -157,16 +179,16 @@ namespace CM3ResolutionPatcher
             buttonBorderColour = MakeColourButton(260, 136, TextOverlayInstaller.DefaultBorderColour);
             groupGame.Controls.Add(buttonBorderColour);
 
-            checkBoxBackup = new CheckBox { Text = "Make a backup of the original exe (cm3_original.exe) first", Left = 12, Top = 554, AutoSize = true, Checked = false };
+            checkBoxBackup = new CheckBox { Text = "Make a backup of the original exe (cm3_original.exe) first", Left = 12, Top = 638, AutoSize = true, Checked = false };
             Controls.Add(checkBoxBackup);
 
-            buttonPatch = new Button { Text = "Apply", Left = 12, Top = 586, Width = 140, Height = 28 };
+            buttonPatch = new Button { Text = "Apply", Left = 12, Top = 670, Width = 140, Height = 28 };
             buttonPatch.Click += buttonPatch_Click;
             Controls.Add(buttonPatch);
 
             labelNote = new Label
             {
-                Left = 164, Top = 582, Width = 344, Height = 52,
+                Left = 164, Top = 666, Width = 344, Height = 52,
                 Text = "CM3 is a 4:3 game: other shapes get black bars at the sides. " +
                        "Windowed mode needs a screen taller than the chosen height. Choose 800x600 to restore the original."
             };
@@ -262,6 +284,14 @@ namespace CM3ResolutionPatcher
                 if (buttonDelay > 0)
                     numericButtonDelay.Value = Math.Max(numericButtonDelay.Minimum, Math.Min(numericButtonDelay.Maximum, buttonDelay));
 
+                int subsNamed, subsUsed;
+                CM3ResolutionChanger.GetSubstitutes(textBoxFile.Text, out subsNamed, out subsUsed);
+                checkBoxSubs.Checked = subsNamed > 0 || subsUsed > 0;
+                if (subsNamed > 0)
+                    numericSubsNamed.Value = Math.Min(numericSubsNamed.Maximum, subsNamed);
+                if (subsUsed > 0)
+                    numericSubsUsed.Value = Math.Min(numericSubsUsed.Maximum, subsUsed);
+
                 checkBoxModernText.Checked = CM3ResolutionChanger.GetTextOverlay(textBoxFile.Text);
                 if (TextOverlayInstaller.IsInstalled(gameFolder))
                 {
@@ -337,7 +367,9 @@ namespace CM3ResolutionPatcher
                 }
 
                 int buttonDelayMs = checkBoxButtonFix.Checked ? (int)numericButtonDelay.Value : 0;
-                CM3ResolutionChanger.Apply(file, width, height, smoothing, modernText, buttonDelayMs);
+                int subsNamedNow = checkBoxSubs.Checked ? (int)numericSubsNamed.Value : 0;
+                int subsUsedNow = checkBoxSubs.Checked ? (int)numericSubsUsed.Value : 0;
+                CM3ResolutionChanger.Apply(file, width, height, smoothing, modernText, buttonDelayMs, subsNamedNow, subsUsedNow);
 
                 string gameFolder = Path.GetDirectoryName(file);
                 if (modernText)
@@ -361,7 +393,8 @@ namespace CM3ResolutionPatcher
                     (width == 800 && height == 600
                         ? "cm3.exe is at its original 800x600."
                         : string.Format("cm3.exe now runs at {0}x{1}.\r\n\r\nIf the game is in full screen, your graphics driver must support that 16-bit mode; otherwise use the -windowed option / Game Settings.", width, height))
-                    + (buttonDelayMs > 0 ? "\r\n\r\nThe + / - and scroll button fix is on." : ""),
+                    + (buttonDelayMs > 0 ? "\r\n\r\nThe + / - and scroll button fix is on." : "")
+                    + (subsNamedNow > 0 ? string.Format("\r\n\r\nSubstitutes: {0} named, {1} may be used (start a new game for it to apply).", subsNamedNow, subsUsedNow) : ""),
                     Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (UnauthorizedAccessException)

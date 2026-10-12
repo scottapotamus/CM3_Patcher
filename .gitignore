@@ -1,3 +1,5 @@
 /bin
 /obj
 .vs
+/SaveGameEditor/bin
+/SaveGameEditor/obj
