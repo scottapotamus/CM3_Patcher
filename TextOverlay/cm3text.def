@@ -1,0 +1,8 @@
+LIBRARY cm3text
+EXPORTS
+    Cm3_Init
+    Cm3_PreDraw
+    Cm3_PostDraw
+    Cm3_BeforeStretch
+    Cm3_AfterStretch
+    Cm3_Rebake
