@@ -288,6 +288,271 @@ namespace CM3SaveGameEditor
             return changed;
         }
 
+        // ---- contracts: contract.dat is a count (u32) followed by that many 72 byte records. In a record:
+        //   +0   staff id (0xFFFFFFFF = unused slot)        +4   club id
+        //   +12  weekly wage (the game shows it x4 per month)
+        //   +16 / +20 / +24  goal / assist / clean sheet bonus (-1 = none; the game rounds what it shows)
+        //   +28..+32  five clause flag bytes, one per clause type (0 = none, 1 = present, 2 = triggered for types 0 and 3)
+        //   +33  the clause release fee, one number shared by the clauses
+        //   +37  start date, +45 expiry date: day of the year counted from 0 (u16), year (u16), flag (u32)
+        //   +53  contract type: bit 7 = part time, bits 0-5 = 1 monthly, 2 normal, 5 trial, 6/7 loan
+        //   +71  high nibble = squad status (1 indispensable ... 7 not needed, 0 uncertain)
+        // The staff.dat record of the same staff id (110 bytes) mirrors the expiry date (+70) and the wage (+78). The
+        // names are in staff.dat (+4 first name id, +8 surname id) and the name files (60 byte records, the name first). ----
+
+        const int ContractRecordSize = 72;
+        const int ContractWageOffset = 12;
+        const int ContractBonusOffset = 16;
+        const int ContractFlagsOffset = 28;
+        const int ContractFeeOffset = 33;
+        const int ContractExpiryOffset = 45;
+        const int ContractTypeOffset = 53;
+        const int ContractStatusOffset = 71;
+        const int StaffRecordSize = 110;
+        const int StaffExpiryOffset = 70;
+        const int StaffWageOffset = 78;
+        const int NameRecordSize = 60;
+        public const int ClauseTypes = 5;
+        public const int BonusTypes = 3;
+
+        public static readonly string[] ClauseNames = {
+            "Non Promotion Release", "Minimum Fee Release", "Non Playing Release", "Relegation Release", "Match Highest Player Wage"
+        };
+
+        public class Contract
+        {
+            public int Record;              // index in contract.dat
+            public int StaffId;
+            public string Name;
+            public int ClubId;
+            public string Club;
+            public int Wage;                // per week
+            public int ExpiryDay, ExpiryYear;
+            public byte TypeByte;
+            public int[] Bonuses = new int[BonusTypes];     // goal, assist, clean sheet; -1 = none
+            public byte StatusByte;         // the squad status is its high nibble
+            public byte[] Flags = new byte[ClauseTypes];    // one per clause type
+            public int Fee;
+
+            public bool HasClauses
+            {
+                get
+                {
+                    foreach (byte flag in Flags)
+                        if (flag != 0)
+                            return true;
+                    return false;
+                }
+            }
+
+            public ContractEdit ToEdit()
+            {
+                ContractEdit edit = new ContractEdit();
+                edit.Flags = (byte[])Flags.Clone();
+                edit.Fee = Fee;
+                edit.Wage = Wage;
+                edit.ExpiryDay = ExpiryDay;
+                edit.ExpiryYear = ExpiryYear;
+                edit.TypeByte = TypeByte;
+                edit.Bonuses = (int[])Bonuses.Clone();
+                edit.StatusByte = StatusByte;
+                return edit;
+            }
+        }
+
+        // The things of a contract the editor can change
+        public class ContractEdit
+        {
+            public byte[] Flags;
+            public int Fee;
+            public int Wage;
+            public int ExpiryDay, ExpiryYear;
+            public byte TypeByte;
+            public int[] Bonuses;
+            public byte StatusByte;
+
+            public bool SameAs(Contract contract)
+            {
+                if (Fee != contract.Fee || Wage != contract.Wage || ExpiryDay != contract.ExpiryDay || ExpiryYear != contract.ExpiryYear ||
+                    TypeByte != contract.TypeByte || StatusByte != contract.StatusByte)
+                    return false;
+                for (int i = 0; i < ClauseTypes; i++)
+                    if (Flags[i] != contract.Flags[i])
+                        return false;
+                for (int i = 0; i < BonusTypes; i++)
+                    if (Bonuses[i] != contract.Bonuses[i])
+                        return false;
+                return true;
+            }
+        }
+
+        static string NameAt(byte[] names, int id)
+        {
+            int at = id * NameRecordSize;
+            if (id < 0 || at + NameRecordSize > names.Length)
+                return "?";
+            int length = 0;
+            while (length < NameRecordSize - 5 && names[at + length] != 0)
+                length++;
+            return System.Text.Encoding.GetEncoding(1252).GetString(names, at, length);
+        }
+
+        static int ContractCount(byte[] contracts)
+        {
+            if (contracts.Length < 4)
+                throw new InvalidDataException("contract.dat isn't in the format this editor knows.");
+            int count = BitConverter.ToInt32(contracts, 0);
+            if (count < 0 || 4 + (long)count * ContractRecordSize > contracts.Length)
+                throw new InvalidDataException("contract.dat isn't in the format this editor knows.");
+            return count;
+        }
+
+        // Every contract in the save (or only the ones that have clauses)
+        public List<Contract> Contracts(bool onlyWithClauses)
+        {
+            byte[] contracts = Decode(Find("contract.dat"));
+            byte[] staff = Decode(Find("staff.dat"));
+            byte[] firstNames = Decode(Find("first_names.dat"));
+            byte[] secondNames = Decode(Find("second_names.dat"));
+            int count = ContractCount(contracts);
+
+            Dictionary<int, string> clubNames = new Dictionary<int, string>();
+            foreach (Club club in Clubs())
+                clubNames[club.Id] = club.Name;
+
+            List<Contract> list = new List<Contract>();
+            for (int i = 0; i < count; i++)
+            {
+                int at = 4 + i * ContractRecordSize;
+                int staffId = BitConverter.ToInt32(contracts, at);
+                if (staffId < 0)
+                    continue;
+
+                Contract contract = new Contract();
+                contract.Record = i;
+                contract.StaffId = staffId;
+                contract.ClubId = BitConverter.ToInt32(contracts, at + 4);
+                contract.Wage = BitConverter.ToInt32(contracts, at + ContractWageOffset);
+                for (int t = 0; t < BonusTypes; t++)
+                    contract.Bonuses[t] = BitConverter.ToInt32(contracts, at + ContractBonusOffset + 4 * t);
+                for (int t = 0; t < ClauseTypes; t++)
+                    contract.Flags[t] = contracts[at + ContractFlagsOffset + t];
+                contract.Fee = BitConverter.ToInt32(contracts, at + ContractFeeOffset);
+                contract.ExpiryDay = BitConverter.ToUInt16(contracts, at + ContractExpiryOffset);
+                contract.ExpiryYear = BitConverter.ToUInt16(contracts, at + ContractExpiryOffset + 2);
+                contract.TypeByte = contracts[at + ContractTypeOffset];
+                contract.StatusByte = contracts[at + ContractStatusOffset];
+                if (onlyWithClauses && !contract.HasClauses)
+                    continue;
+
+                string club;
+                contract.Club = clubNames.TryGetValue(contract.ClubId, out club) ? club : "club " + contract.ClubId;
+
+                int staffAt = staffId * StaffRecordSize;
+                if (staffAt + StaffRecordSize <= staff.Length)
+                    contract.Name = NameAt(firstNames, BitConverter.ToInt32(staff, staffAt + 4)) + " " + NameAt(secondNames, BitConverter.ToInt32(staff, staffAt + 8));
+                else
+                    contract.Name = "staff " + staffId;
+                list.Add(contract);
+            }
+            return list;
+        }
+
+        // Changes contracts (by record number); the changed sub-files (compressed) go into "replaced". A contract left with no
+        // clauses gets a fee of 0. The expiry date and wage are also changed in the staff record when it had the same values
+        // as the contract. Returns how many contracts were changed.
+        public int ReplaceContracts(Dictionary<int, ContractEdit> edits, Dictionary<Entry, byte[]> replaced)
+        {
+            Entry entry = Find("contract.dat");
+            byte[] contracts = Decode(entry);
+            int count = ContractCount(contracts);
+
+            Entry staffEntry = Find("staff.dat");
+            byte[] staff = null;
+            bool staffChanged = false;
+
+            int changed = 0;
+            foreach (KeyValuePair<int, ContractEdit> pair in edits)
+            {
+                if (pair.Key < 0 || pair.Key >= count)
+                    throw new InvalidDataException("There is no contract number " + pair.Key + ".");
+                int at = 4 + pair.Key * ContractRecordSize;
+                ContractEdit edit = pair.Value;
+                if (edit.Flags.Length != ClauseTypes || edit.Bonuses.Length != BonusTypes)
+                    throw new ArgumentException("Bad contract edit.");
+
+                bool any = false;
+                foreach (byte flag in edit.Flags)
+                    if (flag != 0)
+                        any = true;
+                int fee = any ? edit.Fee : 0;
+
+                int oldWage = BitConverter.ToInt32(contracts, at + ContractWageOffset);
+                int oldExpiryDay = BitConverter.ToUInt16(contracts, at + ContractExpiryOffset);
+                int oldExpiryYear = BitConverter.ToUInt16(contracts, at + ContractExpiryOffset + 2);
+
+                // is anything different?
+                bool different = BitConverter.ToInt32(contracts, at + ContractFeeOffset) != fee ||
+                                 oldWage != edit.Wage || oldExpiryDay != edit.ExpiryDay || oldExpiryYear != edit.ExpiryYear ||
+                                 contracts[at + ContractTypeOffset] != edit.TypeByte || contracts[at + ContractStatusOffset] != edit.StatusByte;
+                for (int t = 0; t < ClauseTypes && !different; t++)
+                    if (contracts[at + ContractFlagsOffset + t] != edit.Flags[t])
+                        different = true;
+                for (int t = 0; t < BonusTypes && !different; t++)
+                    if (BitConverter.ToInt32(contracts, at + ContractBonusOffset + 4 * t) != edit.Bonuses[t])
+                        different = true;
+                if (!different)
+                    continue;
+
+                for (int t = 0; t < ClauseTypes; t++)
+                    contracts[at + ContractFlagsOffset + t] = edit.Flags[t];
+                for (int t = 0; t < BonusTypes; t++)
+                    WriteInt(contracts, at + ContractBonusOffset + 4 * t, edit.Bonuses[t]);
+                WriteInt(contracts, at + ContractFeeOffset, fee);
+                WriteInt(contracts, at + ContractWageOffset, edit.Wage);
+                WriteShort(contracts, at + ContractExpiryOffset, edit.ExpiryDay);
+                WriteShort(contracts, at + ContractExpiryOffset + 2, edit.ExpiryYear);
+                contracts[at + ContractTypeOffset] = edit.TypeByte;
+                contracts[at + ContractStatusOffset] = edit.StatusByte;
+                changed++;
+
+                // the staff record mirrors the wage and the expiry date
+                if (oldWage != edit.Wage || oldExpiryDay != edit.ExpiryDay || oldExpiryYear != edit.ExpiryYear)
+                {
+                    if (staff == null)
+                        staff = Decode(staffEntry);
+                    int staffAt = BitConverter.ToInt32(contracts, at) * StaffRecordSize;
+                    if (staffAt >= 0 && staffAt + StaffRecordSize <= staff.Length)
+                    {
+                        if (BitConverter.ToInt32(staff, staffAt + StaffWageOffset) == oldWage)
+                        {
+                            WriteInt(staff, staffAt + StaffWageOffset, edit.Wage);
+                            staffChanged = true;
+                        }
+                        if (BitConverter.ToUInt16(staff, staffAt + StaffExpiryOffset) == oldExpiryDay &&
+                            BitConverter.ToUInt16(staff, staffAt + StaffExpiryOffset + 2) == oldExpiryYear)
+                        {
+                            WriteShort(staff, staffAt + StaffExpiryOffset, edit.ExpiryDay);
+                            WriteShort(staff, staffAt + StaffExpiryOffset + 2, edit.ExpiryYear);
+                            staffChanged = true;
+                        }
+                    }
+                }
+            }
+
+            if (changed > 0)
+                replaced[entry] = RunLength.Encode(contracts);
+            if (staffChanged)
+                replaced[staffEntry] = RunLength.Encode(staff);
+            return changed;
+        }
+
+        static void WriteShort(byte[] buffer, int offset, int value)
+        {
+            buffer[offset] = (byte)value;
+            buffer[offset + 1] = (byte)(value >> 8);
+        }
+
         // Rebuilds the file: everything before the first sub-file as it was (with the new offsets), then each sub-file
         // (the compressed data of the ones in "replaced" instead of the original)
         public void WriteFile(string fileName, Dictionary<Entry, byte[]> replaced)

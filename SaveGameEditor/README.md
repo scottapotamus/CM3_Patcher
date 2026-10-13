@@ -18,6 +18,37 @@ out from the balance and the club's wages and reputation (function at 0x5009D0 i
 balance to give it more to spend. In a test, Barnet's Transfer Funds went from 30,000 to 2,300,000 when its balance went
 from 297,435 to 5,297,435.
 
+## Contracts
+
+The "Contracts" tab lists the contracts in the save (search by player or club; "Only with clauses" narrows it to the
+ones that have clauses). Select one to change: the contract type (Full/Part Time, Contract, Monthly, Trial or Loan), the
+wages per month, the expiry date, the squad status, the goal / assist / clean sheet bonuses (untick one to remove it)
+and the clauses with their release fee. Press Set to keep the change; Apply writes everything. Unticking every clause
+removes the contract's clauses (its fee is set to 0). Only existing clauses can be edited; clauses can be ticked on for
+a contract that has none, but they all share the one release fee.
+
+`contract.dat` is a count (u32) followed by that many 72 byte contract records, then other tables that are copied
+through unchanged. In a record:
+
+| Offset | Field |
+| --- | --- |
+| +0 | staff id (0xFFFFFFFF = unused slot) |
+| +4 | club id |
+| +12 | weekly wage (the game shows it x4 as "per month") |
+| +16, +20, +24 | goal, assist, clean sheet bonus (-1 = none; the game rounds what it shows, e.g. 117 shows as 120) |
+| +28..+32 | five clause flag bytes, one per clause type: Non Promotion, Minimum Fee, Non Playing, Relegation, Match Highest Player Wage (0 = none, 1 = present, 2 = triggered, for Non Promotion and Relegation) |
+| +33 | the clause release fee, one number shared by all of the contract's clauses |
+| +37, +45 | start date, expiry date: day of the year counted from 0 (u16), year (u16), flag (u32) |
+| +53 | contract type: bit 7 = part time, bits 0-5 = 1 monthly, 2 normal, 5 trial, 6 or 7 loan |
+| +71 | high nibble = squad status: 1 indispensable, 2 important first team player, 3 squad rotation, 4 backup, 5 hot prospect, 6 decent young player, 7 not needed (0 = uncertain) |
+
+Editing changes only those bytes in place, so no lengths or offsets change. The expiry date and the wage are also kept
+in the player's `staff.dat` record (+70 and +78), so the editor changes them there too (when they matched the contract's
+old values). Other fields (+8, the tail bytes around +54..+70, pending transfer offers' own copies of the clauses) are not
+understood and are left alone. Player names come from `staff.dat` (+4 first name id, +8 surname id) and the
+`first_names.dat` / `second_names.dat` tables (60 byte records, the name first). A player with a second contract (about
+440 of them) shows up once per contract.
+
 ## Substitutes rules
 
 CM3 stores the substitutes rules in every fixture when the fixture is created, so patching `cm3.exe` (the CM3 Patcher's
