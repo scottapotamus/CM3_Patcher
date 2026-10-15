@@ -2,6 +2,8 @@
 
 Version 2.11
 
+**Download:** [latest release (v2.11)](https://github.com/scottapotamus/CM3_Patcher/releases/tag/v2.11) | [zip file](https://github.com/scottapotamus/CM3_Patcher/archive/refs/tags/v2.11.zip)
+
 One app for Championship Manager 3 (v3.04e): the **Patcher** (this document), the saved game **Editing** and **Scouting**
 (see `SaveGameEditor\README.md`). Start it and pick one on the first screen or from the menu down the left side.
 
