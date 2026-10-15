@@ -17,7 +17,7 @@ namespace CM3SaveGameEditor
     //
     // Fixture lists (fixtures_<year>.tmp) are a 4 byte count followed by 82 byte records. The last two bytes of a record
     // are the match's rules word: bits 0-3 = substitutes named, bits 4-7 = substitutes that may be used, plus flag bits.
-    public class SaveGameFile
+    public partial class SaveGameFile
     {
         const int HeaderSize = 12;
         const int EntrySize = 268;
@@ -102,6 +102,13 @@ namespace CM3SaveGameEditor
             byte[] blob = new byte[entry.End - entry.Offset];
             Array.Copy(data, entry.Offset, blob, 0, blob.Length);
             return blob;
+        }
+
+        // The sub-file as it is now: with the changes that are waiting in "replaced" if there are any
+        byte[] Edit(Entry entry, Dictionary<Entry, byte[]> replaced)
+        {
+            byte[] blob;
+            return replaced.TryGetValue(entry, out blob) ? RunLength.Decode(blob, 0) : Decode(entry);
         }
 
         byte[] Decode(Entry entry)
@@ -190,19 +197,74 @@ namespace CM3SaveGameEditor
             return changed;
         }
 
-        // ---- clubs: names are in club.dat (581 byte records: id, name), the bank balance of each club is a signed 64 bit
-        // number at offset 4 of its record in finance.dat (355 byte records: id, balance, ...) ----
+        // ---- clubs. club.dat has 581 byte records: +0 id, +4 name (52 bytes), +56 short name (24 bytes), +105 the id of the club's
+        // stadium (-1 = none) and +128 the club's reputation (signed 16 bit, 0-10000: the function at 0x5009D0 in cm3.exe uses
+        // it for the transfer funds). The bank balance of each club is a signed 64 bit number at offset 4 of its record in
+        // finance.dat (355 byte records: id, balance, ...). stadium.dat has 78 byte records: +0 id, +4 name (52 bytes), +56 the
+        // city, +60 capacity, +64 seated capacity (the game says "all seated" when it is not below the capacity). ----
 
         const int ClubRecordSize = 581;
+        const int ClubNameOffset = 4;
         const int ClubNameLength = 52;
+        const int ClubShortNameOffset = 56;
+        const int ClubShortNameLength = 24;
+        const int ClubStadiumOffset = 105;
+        const int ClubReputationOffset = 128;
         const int FinanceRecordSize = 355;
         const int FinanceBalanceOffset = 4;
+        const int StadiumRecordSize = 78;
+        const int StadiumNameOffset = 4;
+        const int StadiumCapacityOffset = 60;
+        const int StadiumSeatedOffset = 64;
+
+        public const int MaxClubName = 50;
+        public const int MaxShortName = 24;
+        public const int MaxStadiumName = 50;
 
         public class Club
         {
             public int Id;
             public string Name;
+            public string ShortName;
+            public int Reputation;
             public long Balance;
+            public int StadiumId;           // -1 = the club has no stadium
+            public string StadiumName;
+            public int Capacity;
+            public int Seated;
+            public int StadiumClubs;        // how many clubs use this stadium
+
+            public ClubEdit ToEdit()
+            {
+                ClubEdit edit = new ClubEdit();
+                edit.Name = Name;
+                edit.ShortName = ShortName;
+                edit.Reputation = Reputation;
+                edit.Balance = Balance;
+                edit.StadiumName = StadiumName;
+                edit.Capacity = Capacity;
+                edit.Seated = Seated;
+                return edit;
+            }
+        }
+
+        // The things of a club the editor can change
+        public class ClubEdit
+        {
+            public string Name;
+            public string ShortName;
+            public int Reputation;
+            public long Balance;
+            public string StadiumName;      // the stadium things are ignored for a club without a stadium
+            public int Capacity;
+            public int Seated;
+
+            public bool SameAs(Club club)
+            {
+                if (Name != club.Name || ShortName != club.ShortName || Reputation != club.Reputation || Balance != club.Balance)
+                    return false;
+                return club.StadiumId < 0 || (StadiumName == club.StadiumName && Capacity == club.Capacity && Seated == club.Seated);
+            }
         }
 
         Entry Find(string name)
@@ -213,31 +275,67 @@ namespace CM3SaveGameEditor
             throw new InvalidDataException("This saved game has no " + name + ".");
         }
 
+        static string ReadString(byte[] buffer, int at, int length)
+        {
+            int n = 0;
+            while (n < length && buffer[at + n] != 0)
+                n++;
+            return System.Text.Encoding.GetEncoding(1252).GetString(buffer, at, n);
+        }
+
+        static void WriteString(byte[] buffer, int at, int length, string text)
+        {
+            byte[] bytes = System.Text.Encoding.GetEncoding(1252).GetBytes(text);
+            if (bytes.Length > length)
+                throw new ArgumentException("\"" + text + "\" is too long (at most " + length + " characters).");
+            Array.Clear(buffer, at, length);
+            Array.Copy(bytes, 0, buffer, at, bytes.Length);
+        }
+
         public List<Club> Clubs()
         {
             byte[] clubData = Decode(Find("club.dat"));
             byte[] finance = Decode(Find("finance.dat"));
-            if (clubData.Length % ClubRecordSize != 0 || finance.Length % FinanceRecordSize != 0)
-                throw new InvalidDataException("club.dat or finance.dat isn't in the format this editor knows.");
+            byte[] stadiums = Decode(Find("stadium.dat"));
+            if (clubData.Length % ClubRecordSize != 0 || finance.Length % FinanceRecordSize != 0 || stadiums.Length % StadiumRecordSize != 0)
+                throw new InvalidDataException("club.dat, finance.dat or stadium.dat isn't in the format this editor knows.");
 
             int financeCount = finance.Length / FinanceRecordSize;
+            int stadiumCount = stadiums.Length / StadiumRecordSize;
+            Dictionary<int, int> stadiumUsers = new Dictionary<int, int>();
             List<Club> clubs = new List<Club>();
             for (int i = 0; i < clubData.Length / ClubRecordSize; i++)
             {
                 int at = i * ClubRecordSize;
                 Club club = new Club();
                 club.Id = BitConverter.ToInt32(clubData, at);
-                int length = 0;
-                while (length < ClubNameLength && clubData[at + 4 + length] != 0)
-                    length++;
-                club.Name = System.Text.Encoding.GetEncoding(1252).GetString(clubData, at + 4, length);
+                club.Name = ReadString(clubData, at + ClubNameOffset, ClubNameLength);
+                club.ShortName = ReadString(clubData, at + ClubShortNameOffset, ClubShortNameLength);
+                club.Reputation = BitConverter.ToInt16(clubData, at + ClubReputationOffset);
 
                 int record = FindFinanceRecord(finance, financeCount, club.Id);
                 if (record < 0)
                     continue;
                 club.Balance = BitConverter.ToInt64(finance, record * FinanceRecordSize + FinanceBalanceOffset);
+
+                club.StadiumId = BitConverter.ToInt32(clubData, at + ClubStadiumOffset);
+                if (club.StadiumId >= 0 && (club.StadiumId >= stadiumCount || BitConverter.ToInt32(stadiums, club.StadiumId * StadiumRecordSize) != club.StadiumId))
+                    club.StadiumId = -1;
+                if (club.StadiumId >= 0)
+                {
+                    int stadiumAt = club.StadiumId * StadiumRecordSize;
+                    club.StadiumName = ReadString(stadiums, stadiumAt + StadiumNameOffset, ClubNameLength);
+                    club.Capacity = BitConverter.ToInt32(stadiums, stadiumAt + StadiumCapacityOffset);
+                    club.Seated = BitConverter.ToInt32(stadiums, stadiumAt + StadiumSeatedOffset);
+                    int users;
+                    stadiumUsers.TryGetValue(club.StadiumId, out users);
+                    stadiumUsers[club.StadiumId] = users + 1;
+                }
                 clubs.Add(club);
             }
+            foreach (Club club in clubs)
+                if (club.StadiumId >= 0)
+                    club.StadiumClubs = stadiumUsers[club.StadiumId];
             return clubs;
         }
 
@@ -252,39 +350,95 @@ namespace CM3SaveGameEditor
             return -1;
         }
 
-        // Sets the bank balance of clubs (by club id); the changed sub-file (compressed) goes into "replaced".
-        // Returns how many were changed.
-        public int ReplaceBalances(Dictionary<int, long> balances, Dictionary<Entry, byte[]> replaced)
+        // Changes clubs (by club id): names, reputation, bank balance and the club's stadium (a stadium that several clubs use
+        // changes for all of them). The changed sub-files (compressed) go into "replaced". Returns how many clubs were changed.
+        public int ReplaceClubs(Dictionary<int, ClubEdit> edits, Dictionary<Entry, byte[]> replaced)
         {
-            Entry entry = Find("finance.dat");
-            byte[] finance = Decode(entry);
-            if (finance.Length % FinanceRecordSize != 0)
-                throw new InvalidDataException("finance.dat isn't in the format this editor knows.");
-            int count = finance.Length / FinanceRecordSize;
+            Entry clubEntry = Find("club.dat");
+            Entry financeEntry = Find("finance.dat");
+            Entry stadiumEntry = Find("stadium.dat");
+            byte[] clubData = Edit(clubEntry, replaced);
+            byte[] finance = Edit(financeEntry, replaced);
+            byte[] stadiums = Edit(stadiumEntry, replaced);
+            if (clubData.Length % ClubRecordSize != 0 || finance.Length % FinanceRecordSize != 0 || stadiums.Length % StadiumRecordSize != 0)
+                throw new InvalidDataException("club.dat, finance.dat or stadium.dat isn't in the format this editor knows.");
+            int financeCount = finance.Length / FinanceRecordSize;
+            int stadiumCount = stadiums.Length / StadiumRecordSize;
 
+            bool clubsChanged = false, financeChanged = false, stadiumsChanged = false;
             int changed = 0;
-            foreach (KeyValuePair<int, long> pair in balances)
+            foreach (KeyValuePair<int, ClubEdit> pair in edits)
             {
-                int record = FindFinanceRecord(finance, count, pair.Key);
+                ClubEdit edit = pair.Value;
+                if (pair.Key < 0 || (pair.Key + 1) * ClubRecordSize > clubData.Length || BitConverter.ToInt32(clubData, pair.Key * ClubRecordSize) != pair.Key)
+                    throw new InvalidDataException("There is no club " + pair.Key + ".");
+                int at = pair.Key * ClubRecordSize;
+                if (edit.Name.Trim().Length == 0 || edit.ShortName.Trim().Length == 0)
+                    throw new ArgumentException("A club needs a name and a short name.");
+                bool any = false;
+
+                if (ReadString(clubData, at + ClubNameOffset, ClubNameLength) != edit.Name)
+                {
+                    WriteString(clubData, at + ClubNameOffset, ClubNameLength, edit.Name);
+                    any = clubsChanged = true;
+                }
+                if (ReadString(clubData, at + ClubShortNameOffset, ClubShortNameLength) != edit.ShortName)
+                {
+                    WriteString(clubData, at + ClubShortNameOffset, ClubShortNameLength, edit.ShortName);
+                    any = clubsChanged = true;
+                }
+                if (edit.Reputation < short.MinValue || edit.Reputation > short.MaxValue)
+                    throw new ArgumentException("The reputation must be between " + short.MinValue + " and " + short.MaxValue + ".");
+                if (BitConverter.ToInt16(clubData, at + ClubReputationOffset) != edit.Reputation)
+                {
+                    WriteShort(clubData, at + ClubReputationOffset, edit.Reputation);
+                    any = clubsChanged = true;
+                }
+
+                int record = FindFinanceRecord(finance, financeCount, pair.Key);
                 if (record < 0)
                     throw new InvalidDataException("There is no finance record for club " + pair.Key + ".");
-                int at = record * FinanceRecordSize + FinanceBalanceOffset;
-                if (BitConverter.ToInt64(finance, at) == pair.Value)
-                    continue;
-                WriteLong(finance, at, pair.Value);
-                changed++;
+                int financeAt = record * FinanceRecordSize + FinanceBalanceOffset;
+                if (BitConverter.ToInt64(finance, financeAt) != edit.Balance)
+                {
+                    WriteLong(finance, financeAt, edit.Balance);
+                    any = financeChanged = true;
+                }
+
+                int stadiumId = BitConverter.ToInt32(clubData, at + ClubStadiumOffset);
+                if (stadiumId >= 0 && stadiumId < stadiumCount && BitConverter.ToInt32(stadiums, stadiumId * StadiumRecordSize) == stadiumId)
+                {
+                    int stadiumAt = stadiumId * StadiumRecordSize;
+                    if (edit.Capacity < 0 || edit.Seated < 0)
+                        throw new ArgumentException("The capacity can't be negative.");
+                    if (ReadString(stadiums, stadiumAt + StadiumNameOffset, ClubNameLength) != edit.StadiumName)
+                    {
+                        if (edit.StadiumName.Trim().Length == 0)
+                            throw new ArgumentException("A stadium needs a name.");
+                        WriteString(stadiums, stadiumAt + StadiumNameOffset, ClubNameLength, edit.StadiumName);
+                        any = stadiumsChanged = true;
+                    }
+                    if (BitConverter.ToInt32(stadiums, stadiumAt + StadiumCapacityOffset) != edit.Capacity)
+                    {
+                        WriteInt(stadiums, stadiumAt + StadiumCapacityOffset, edit.Capacity);
+                        any = stadiumsChanged = true;
+                    }
+                    if (BitConverter.ToInt32(stadiums, stadiumAt + StadiumSeatedOffset) != edit.Seated)
+                    {
+                        WriteInt(stadiums, stadiumAt + StadiumSeatedOffset, edit.Seated);
+                        any = stadiumsChanged = true;
+                    }
+                }
+                if (any)
+                    changed++;
             }
 
-            if (changed > 0)
-                replaced[entry] = RunLength.Encode(finance);
-            return changed;
-        }
-
-        public int WriteWithBalances(string fileName, Dictionary<int, long> balances)
-        {
-            Dictionary<Entry, byte[]> replaced = new Dictionary<Entry, byte[]>();
-            int changed = ReplaceBalances(balances, replaced);
-            WriteFile(fileName, replaced);
+            if (clubsChanged)
+                replaced[clubEntry] = RunLength.Encode(clubData);
+            if (financeChanged)
+                replaced[financeEntry] = RunLength.Encode(finance);
+            if (stadiumsChanged)
+                replaced[stadiumEntry] = RunLength.Encode(stadiums);
             return changed;
         }
 
@@ -301,6 +455,7 @@ namespace CM3SaveGameEditor
         // names are in staff.dat (+4 first name id, +8 surname id) and the name files (60 byte records, the name first). ----
 
         const int ContractRecordSize = 72;
+        const int ContractClubOffset = 4;
         const int ContractWageOffset = 12;
         const int ContractBonusOffset = 16;
         const int ContractFlagsOffset = 28;
@@ -333,6 +488,8 @@ namespace CM3SaveGameEditor
             public byte StatusByte;         // the squad status is its high nibble
             public byte[] Flags = new byte[ClauseTypes];    // one per clause type
             public int Fee;
+            public bool IsStaff;            // not a player
+            public string Job;              // of a member of staff
 
             public bool HasClauses
             {
@@ -356,6 +513,7 @@ namespace CM3SaveGameEditor
                 edit.TypeByte = TypeByte;
                 edit.Bonuses = (int[])Bonuses.Clone();
                 edit.StatusByte = StatusByte;
+                edit.ClubId = ClubId;
                 return edit;
             }
         }
@@ -370,10 +528,11 @@ namespace CM3SaveGameEditor
             public byte TypeByte;
             public int[] Bonuses;
             public byte StatusByte;
+            public int ClubId;
 
             public bool SameAs(Contract contract)
             {
-                if (Fee != contract.Fee || Wage != contract.Wage || ExpiryDay != contract.ExpiryDay || ExpiryYear != contract.ExpiryYear ||
+                if (ClubId != contract.ClubId || Fee != contract.Fee || Wage != contract.Wage || ExpiryDay != contract.ExpiryDay || ExpiryYear != contract.ExpiryYear ||
                     TypeByte != contract.TypeByte || StatusByte != contract.StatusByte)
                     return false;
                 for (int i = 0; i < ClauseTypes; i++)
@@ -414,6 +573,7 @@ namespace CM3SaveGameEditor
             byte[] staff = Decode(Find("staff.dat"));
             byte[] firstNames = Decode(Find("first_names.dat"));
             byte[] secondNames = Decode(Find("second_names.dat"));
+            byte[] commonNames = Decode(Find("common_names.dat"));
             int count = ContractCount(contracts);
 
             Dictionary<int, string> clubNames = new Dictionary<int, string>();
@@ -449,8 +609,15 @@ namespace CM3SaveGameEditor
                 contract.Club = clubNames.TryGetValue(contract.ClubId, out club) ? club : "club " + contract.ClubId;
 
                 int staffAt = staffId * StaffRecordSize;
+                contract.Job = "";
                 if (staffAt + StaffRecordSize <= staff.Length)
-                    contract.Name = NameAt(firstNames, BitConverter.ToInt32(staff, staffAt + 4)) + " " + NameAt(secondNames, BitConverter.ToInt32(staff, staffAt + 8));
+                {
+                    contract.IsStaff = BitConverter.ToInt32(staff, staffAt + StaffPlayerOffset) < 0;
+                    int job = staff[staffAt + StaffJobOffset];
+                    contract.Job = job < StaffFields.Jobs.Length ? StaffFields.Jobs[job] : "job " + job;
+                }
+                if (staffAt + StaffRecordSize <= staff.Length)
+                    contract.Name = StaffName(staff, staffAt, firstNames, secondNames, commonNames);
                 else
                     contract.Name = "staff " + staffId;
                 list.Add(contract);
@@ -464,12 +631,13 @@ namespace CM3SaveGameEditor
         public int ReplaceContracts(Dictionary<int, ContractEdit> edits, Dictionary<Entry, byte[]> replaced)
         {
             Entry entry = Find("contract.dat");
-            byte[] contracts = Decode(entry);
+            byte[] contracts = Edit(entry, replaced);
             int count = ContractCount(contracts);
 
             Entry staffEntry = Find("staff.dat");
             byte[] staff = null;
             bool staffChanged = false;
+            List<int[]> moves = new List<int[]>();      // staff id, the club he was at, the club he goes to
 
             int changed = 0;
             foreach (KeyValuePair<int, ContractEdit> pair in edits)
@@ -492,7 +660,8 @@ namespace CM3SaveGameEditor
                 int oldExpiryYear = BitConverter.ToUInt16(contracts, at + ContractExpiryOffset + 2);
 
                 // is anything different?
-                bool different = BitConverter.ToInt32(contracts, at + ContractFeeOffset) != fee ||
+                bool different = BitConverter.ToInt32(contracts, at + ContractClubOffset) != edit.ClubId ||
+                                 BitConverter.ToInt32(contracts, at + ContractFeeOffset) != fee ||
                                  oldWage != edit.Wage || oldExpiryDay != edit.ExpiryDay || oldExpiryYear != edit.ExpiryYear ||
                                  contracts[at + ContractTypeOffset] != edit.TypeByte || contracts[at + ContractStatusOffset] != edit.StatusByte;
                 for (int t = 0; t < ClauseTypes && !different; t++)
@@ -504,6 +673,10 @@ namespace CM3SaveGameEditor
                 if (!different)
                     continue;
 
+                int oldClub = BitConverter.ToInt32(contracts, at + ContractClubOffset);
+                if (oldClub != edit.ClubId)
+                    moves.Add(new int[] { BitConverter.ToInt32(contracts, at), oldClub, edit.ClubId });
+                WriteInt(contracts, at + ContractClubOffset, edit.ClubId);
                 for (int t = 0; t < ClauseTypes; t++)
                     contracts[at + ContractFlagsOffset + t] = edit.Flags[t];
                 for (int t = 0; t < BonusTypes; t++)
@@ -520,7 +693,7 @@ namespace CM3SaveGameEditor
                 if (oldWage != edit.Wage || oldExpiryDay != edit.ExpiryDay || oldExpiryYear != edit.ExpiryYear)
                 {
                     if (staff == null)
-                        staff = Decode(staffEntry);
+                        staff = Edit(staffEntry, replaced);
                     int staffAt = BitConverter.ToInt32(contracts, at) * StaffRecordSize;
                     if (staffAt >= 0 && staffAt + StaffRecordSize <= staff.Length)
                     {
@@ -540,11 +713,116 @@ namespace CM3SaveGameEditor
                 }
             }
 
+            // a member of staff who goes to another club: his staff record and the club's lists of staff and players follow
+            if (moves.Count > 0)
+            {
+                if (staff == null)
+                    staff = Edit(staffEntry, replaced);
+                Entry clubEntry = Find("club.dat");
+                byte[] clubData = Edit(clubEntry, replaced);
+                if (clubData.Length % ClubRecordSize != 0)
+                    throw new InvalidDataException("club.dat isn't in the format this editor knows.");
+                byte[] firstNames = Decode(Find("first_names.dat"));
+                byte[] secondNames = Decode(Find("second_names.dat"));
+                byte[] commonNames = Decode(Find("common_names.dat"));
+                bool rostersChanged = false;
+                foreach (int[] move in moves)
+                {
+                    int staffId = move[0], from = move[1], to = move[2];
+                    int staffAt = staffId * StaffRecordSize;
+                    if (staffId < 0 || staffAt + StaffRecordSize > staff.Length)
+                        continue;
+                    if (to < 0 || (to + 1) * ClubRecordSize > clubData.Length || BitConverter.ToInt32(clubData, to * ClubRecordSize) != to)
+                        throw new InvalidDataException("There is no club " + to + ".");
+                    if (BitConverter.ToInt32(staff, staffAt + StaffClubOffset) != from)
+                        continue;       // e.g. a loan: his own club stays as it is
+
+                    string who = StaffName(staff, staffAt, firstNames, secondNames, commonNames);
+                    MoveToClub(clubData, staffId, staff[staffAt + StaffJobOffset], from, to, who);
+                    WriteInt(staff, staffAt + StaffClubOffset, to);
+                    staffChanged = rostersChanged = true;
+                }
+                if (rostersChanged)
+                    replaced[clubEntry] = RunLength.Encode(clubData);
+            }
+
             if (changed > 0)
                 replaced[entry] = RunLength.Encode(contracts);
             if (staffChanged)
                 replaced[staffEntry] = RunLength.Encode(staff);
             return changed;
+        }
+
+        // The lists of staff ids in a club.dat record: from +155 on, 4 bytes each, -1 = empty.
+        //   +191 chairman   +195 / +199 / +203 managing director, general manager, director of football   +207 manager
+        //   +211 assistant manager   +215 .. +411 the players (50)   +415 .. +431 coaches   +435 .. +459 scouts
+        //   +463 .. +471 physios
+        // (+155 .. +187 is another list that has some of the staff in it; a member of staff who leaves is taken out of it too.)
+        const int RosterStart = 155;
+        const int RosterEnd = 471;
+
+        static readonly int[][] JobSlots = {
+            new int[0],                                                 // 0 unemployed
+            new int[] { 191 },                                          // 1 chairman
+            new int[] { 195, 199, 203 },                                // 2 managing director
+            new int[] { 195, 199, 203 },                                // 3 general manager
+            new int[] { 195, 199, 203 },                                // 4 director of football
+            new int[] { 207 },                                          // 5 manager
+            new int[] { 211 },                                          // 6 assistant manager
+            new int[] { 211 },                                          // 7 reserve manager
+            new int[] { 415, 419, 423, 427, 431 },                      // 8 coach
+            new int[] { 435, 439, 443, 447, 451, 455, 459 },            // 9 scout
+            new int[] { 463, 467, 471 },                                // 10 physio
+            Range(215, 411),                                            // 11 player
+            Range(215, 411),                                            // 12 player / manager
+            Range(215, 411),                                            // 13 player / assistant manager
+            new int[0],                                                 // 14
+            Range(215, 411)                                             // 15 player / coach
+        };
+
+        static int[] Range(int first, int last)
+        {
+            List<int> slots = new List<int>();
+            for (int at = first; at <= last; at += 4)
+                slots.Add(at);
+            return slots.ToArray();
+        }
+
+        static int FreeSlot(byte[] clubData, int record, int[] slots)
+        {
+            foreach (int slot in slots)
+                if (BitConverter.ToInt32(clubData, record * ClubRecordSize + slot) == -1)
+                    return slot;
+            return -1;
+        }
+
+        // Takes a member of staff out of the lists of a club and puts him into the lists of another one
+        static void MoveToClub(byte[] clubData, int staffId, int job, int from, int to, string name)
+        {
+            // first check there is room, so nothing is half done
+            int[] slots = job < JobSlots.Length ? JobSlots[job] : new int[0];
+            int target = slots.Length == 0 ? -1 : FreeSlot(clubData, to, slots);
+            string clubName = ReadString(clubData, to * ClubRecordSize + ClubNameOffset, ClubNameLength);
+            if (slots.Length > 0 && target < 0)
+                throw new InvalidDataException(clubName + " has no free place for " + name + " (" + (job < StaffFields.Jobs.Length ? StaffFields.Jobs[job] : "job " + job) +
+                                               "). Move the one who is there somewhere else first.");
+
+            if (from >= 0 && (from + 1) * ClubRecordSize <= clubData.Length)
+                for (int at = RosterStart; at <= RosterEnd; at += 4)
+                    if (BitConverter.ToInt32(clubData, from * ClubRecordSize + at) == staffId)
+                        WriteInt(clubData, from * ClubRecordSize + at, -1);
+
+            if (target >= 0)
+                WriteInt(clubData, to * ClubRecordSize + target, staffId);
+
+            // a player who is also a manager, assistant or coach takes that job at the new club if it is free
+            int[] extra = job == 12 ? JobSlots[5] : job == 13 ? JobSlots[6] : job == 15 ? JobSlots[8] : null;
+            if (extra != null)
+            {
+                int free = FreeSlot(clubData, to, extra);
+                if (free >= 0)
+                    WriteInt(clubData, to * ClubRecordSize + free, staffId);
+            }
         }
 
         static void WriteShort(byte[] buffer, int offset, int value)
@@ -579,6 +857,15 @@ namespace CM3SaveGameEditor
                 for (int i = 0; i < entries.Count; i++)
                     WriteInt(result, entries[i].DirectoryPosition, newOffsets[i]);
 
+                // changed sub-files may have a different size now
+                foreach (KeyValuePair<Entry, byte[]> pair in replaced)
+                {
+                    int size = RunLength.Decode(pair.Value, pair.Key.Size).Length;
+                    if (size != pair.Key.Size)
+                        WriteInt(result, pair.Key.DirectoryPosition + 4, size);
+                }
+
+                ApplyRenames(result);
                 File.WriteAllBytes(fileName, result);
             }
         }

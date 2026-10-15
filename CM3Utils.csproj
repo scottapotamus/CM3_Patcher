@@ -4,10 +4,10 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{5C1B6F0E-3D52-4E0B-9A47-C2E8D1A7B3F4}</ProjectGuid>
+    <ProjectGuid>{9B4E2C71-5A08-4D36-8E1F-7C3A60D52B94}</ProjectGuid>
     <OutputType>WinExe</OutputType>
-    <RootNamespace>CM3ResolutionPatcher</RootNamespace>
-    <AssemblyName>Scottapotamus CM3 Patcher</AssemblyName>
+    <RootNamespace>CM3SaveGameEditor</RootNamespace>
+    <AssemblyName>CM3 Utils</AssemblyName>
     <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <TargetFrameworkProfile />
@@ -29,20 +29,18 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
-  <PropertyGroup>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
-  </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
   </ItemGroup>
   <ItemGroup>
+    <!-- the patcher (cm3.exe) -->
     <Compile Include="CM3ResolutionChanger.cs" />
     <Compile Include="FontSharpener.cs" />
-    <Compile Include="MainForm.cs" />
-    <Compile Include="Program.cs" />
     <Compile Include="TextOverlayInstaller.cs" />
+    <!-- the app: the patcher screen, the saved game editor and the scouting -->
+    <Compile Include="SaveGameEditor\*.cs" />
   </ItemGroup>
   <ItemGroup>
     <!-- Built by TextOverlay\build.bat (needs the Visual Studio C++ build tools); the built DLL is checked in -->

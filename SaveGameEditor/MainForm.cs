@@ -8,45 +8,15 @@ using System.Windows.Forms;
 
 namespace CM3SaveGameEditor
 {
-    public class MainForm : Form
+    public partial class MainForm : Form
     {
-        // The game's amounts are mostly 32 bit numbers, so stay inside that
-        const decimal MaxBalance = 2000000000m;
-
         TextBox textBoxFile;
         Button buttonBrowse;
         Label labelStatus;
 
         TabControl tabs;
-
-        // Club finances
-        TextBox textBoxFilter;
-        ListView listClubs;
-        NumericUpDown numericBalance;
-        Button buttonSetBalance;
-        Button buttonAdd1;
-        Button buttonAdd10;
-        Button buttonAdd50;
-        Button buttonClearEdits;
-        Label labelEdits;
-
-        // Contracts
-        TextBox textBoxContractFilter;
-        CheckBox checkBoxOnlyClauses;
-        Label labelContractCount;
-        ListView listContracts;
-        ComboBox comboPartFull;
-        ComboBox comboKind;
-        NumericUpDown numericWage;
-        DateTimePicker dateExpiry;
-        ComboBox comboStatus;
-        CheckBox[] checkBoxBonus = new CheckBox[SaveGameFile.BonusTypes];
-        NumericUpDown[] numericBonus = new NumericUpDown[SaveGameFile.BonusTypes];
-        CheckBox[] checkBoxClauses = new CheckBox[SaveGameFile.ClauseTypes];
-        NumericUpDown numericFee;
-        Button buttonSetContract;
-        Button buttonClearContracts;
-        Label labelContractEdits;
+        ScoutingPanel playerScouting;
+        ScoutingPanel staffScouting;
 
         // Substitutes
         CheckBox checkBoxSubs;
@@ -60,382 +30,312 @@ namespace CM3SaveGameEditor
 
         SaveGameFile save;
         List<SaveGameFile.Club> clubs = new List<SaveGameFile.Club>();
-        Dictionary<int, long> edits = new Dictionary<int, long>();      // club id -> new balance
+        Dictionary<int, SaveGameFile.ClubEdit> edits = new Dictionary<int, SaveGameFile.ClubEdit>();      // club id -> the club as it should be
+        AttributesPanel playerAttributes;
+        AttributesPanel staffAttributes;
+        Dictionary<int, int[]> playerAttributeEdits = new Dictionary<int, int[]>();     // staff id -> the numbers as they should be
+        Dictionary<int, int[]> staffAttributeEdits = new Dictionary<int, int[]>();
+        ContractsPanel playerContracts;
+        ContractsPanel staffContracts;
         List<SaveGameFile.Contract> contracts = new List<SaveGameFile.Contract>();
         Dictionary<int, SaveGameFile.ContractEdit> contractEdits = new Dictionary<int, SaveGameFile.ContractEdit>();   // contract record -> new clauses
 
-        static readonly string[] ShortClauseNames = { "Non Promotion", "Min Fee Release", "Non Playing", "Relegation", "Match Highest Wage" };
+        static readonly Color StatusColor = Color.FromArgb(205, 210, 235);
 
-        // contract type: bits 0-5 of the contract's type byte (bit 7 = part time)
-        static readonly string[] KindNames = { "Contract", "Monthly Contract", "Trial Contract", "Loan Contract" };
-        static readonly int[] KindValues = { 2, 1, 5, 6 };
-        static readonly string[] StatusNames = {
-            "Uncertain", "Indispensable to the club", "Important first team player", "Used in a squad rotation system",
-            "Backup for the first team", "Hot prospect for the future", "Decent young player", "Not needed by the club"
-        };
-        static readonly string[] BonusNames = { "Goal bonus", "Assist bonus", "Clean sheet bonus" };
+        Panel header;
+        Panel fileBar;
+        Panel footer;
+        Panel body;
+        Panel welcome;
+        Panel tiles;
+        Label labelWelcome;
+        Label labelHint;
+        Button buttonPatcher;
+        PatcherPanel patcher;
+        Button buttonEditing;
+        Button buttonScouting;
+        Button buttonExit;
+        TabControl scoutTabs;
 
-        const int MaxListedContracts = 300;
+        const int ModeHome = 0, ModePatcher = 1, ModeEditing = 2, ModeScouting = 3;
 
-        public MainForm()
+        public MainForm() : this(ModeHome)
         {
-            Text = "Scottapotamus CM3 Save Game Editor";
-            ClientSize = new Size(520, 706);
-            FormBorderStyle = FormBorderStyle.FixedDialog;
-            MaximizeBox = false;
+        }
+
+        // startMode: the part to open at (e.g. after restarting as administrator)
+        public MainForm(int startMode)
+        {
+            Text = "CM3 Utils by Scottapotamus";
+            Font = Theme.Normal;
+            AutoScaleDimensions = new SizeF(96F, 96F);
+            AutoScaleMode = AutoScaleMode.Dpi;
+            ClientSize = new Size(1240, 780);
+            MinimumSize = SizeFromClientSize(new Size(1000, 640));
             StartPosition = FormStartPosition.CenterScreen;
+            BackColor = Theme.DarkNavy;
 
-            Controls.Add(new Label { Text = "Saved game (.sav):", Left = 12, Top = 14, AutoSize = true });
-            textBoxFile = new TextBox { Left = 12, Top = 34, Width = 420 };
+            // the title bar, with the two parts of the editor
+            header = new Panel { Dock = DockStyle.Top, Height = 58, BackColor = Theme.Red };
+            Label title = new Label
+            {
+                Text = "CM3 Utils", ForeColor = Color.White, Font = new Font("Arial", 18f, FontStyle.Bold),
+                Left = 16, Top = 10, AutoSize = true, Cursor = Cursors.Hand
+            };
+            title.Click += delegate { ShowMode(ModeHome); };
+            header.Controls.Add(title);
+            header.Controls.Add(new Label
+            {
+                Text = "by Scottapotamus", ForeColor = Theme.Yellow, Font = new Font("Arial", 9f, FontStyle.Bold),
+                Left = 148, Top = 24, AutoSize = true, Cursor = Cursors.Hand
+            });
+            buttonPatcher = new Button { Text = "PATCHER", Width = 130, Height = 36, Top = 11, Font = new Font("Arial", 9.5f, FontStyle.Bold) };
+            buttonEditing = new Button { Text = "EDITING", Width = 130, Height = 36, Top = 11, Font = new Font("Arial", 9.5f, FontStyle.Bold) };
+            buttonScouting = new Button { Text = "SCOUTING", Width = 130, Height = 36, Top = 11, Font = new Font("Arial", 9.5f, FontStyle.Bold) };
+            buttonExit = new Button { Text = "EXIT", Width = 80, Height = 36, Top = 11, Font = new Font("Arial", 9.5f, FontStyle.Bold) };
+            buttonPatcher.Click += delegate { ChooseMode(ModePatcher); };
+            buttonEditing.Click += delegate { ChooseMode(ModeEditing); };
+            buttonScouting.Click += delegate { ChooseMode(ModeScouting); };
+            buttonExit.Click += delegate { ExitApplication(); };
+            header.Controls.Add(buttonPatcher);
+            header.Controls.Add(buttonEditing);
+            header.Controls.Add(buttonScouting);
+            header.Controls.Add(buttonExit);
+            header.Resize += delegate
+            {
+                buttonExit.Left = header.ClientSize.Width - buttonExit.Width - 16;
+                buttonScouting.Left = buttonExit.Left - buttonScouting.Width - 24;
+                buttonEditing.Left = buttonScouting.Left - buttonEditing.Width - 8;
+                buttonPatcher.Left = buttonEditing.Left - buttonPatcher.Width - 8;
+            };
+
+            // the saved game
+            fileBar = new Panel { Dock = DockStyle.Top, Height = 78, BackColor = Theme.DarkNavy };
+            fileBar.Controls.Add(new Label { Text = "Saved game (.sav):", ForeColor = Color.White, Font = Theme.Bold, Left = 16, Top = 10, AutoSize = true });
+            textBoxFile = new TextBox { Left = 16, Top = 30, Width = 1000 };
             textBoxFile.TextChanged += delegate { LoadSave(); };
-            buttonBrowse = new Button { Text = "Browse...", Left = 440, Top = 32, Width = 68 };
+            buttonBrowse = new Button { Text = "Browse...", Top = 28, Width = 90, Height = 24 };
             buttonBrowse.Click += buttonBrowse_Click;
-            Controls.Add(textBoxFile);
-            Controls.Add(buttonBrowse);
+            fileBar.Controls.Add(textBoxFile);
+            fileBar.Controls.Add(buttonBrowse);
+            labelStatus = new Label { Left = 16, Top = 56, Width = 1000, Height = 18, Text = "", ForeColor = StatusColor };
+            fileBar.Controls.Add(labelStatus);
+            fileBar.Resize += delegate
+            {
+                buttonBrowse.Left = fileBar.ClientSize.Width - buttonBrowse.Width - 16;
+                textBoxFile.Width = buttonBrowse.Left - 8 - textBoxFile.Left;
+                labelStatus.Width = fileBar.ClientSize.Width - 32;
+            };
 
-            labelStatus = new Label { Left = 12, Top = 66, Width = 496, Height = 18, Text = "" };
-            Controls.Add(labelStatus);
+            // the editing tabs and the scouting tabs (and the first screen) share the middle
+            body = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12, 12, 12, 8), BackColor = Theme.DarkNavy };
 
-            tabs = new TabControl { Left = 12, Top = 90, Width = 496, Height = 510 };
-            Controls.Add(tabs);
+            tabs = new TabControl { Dock = DockStyle.Fill, Visible = false };
+            BuildClubsTab();
+            BuildCompetitionsTab();
+            Action contractsChanged = delegate { playerContracts.RefreshEdits(); staffContracts.RefreshEdits(); };
+            playerContracts = new ContractsPanel("Players", false, contractEdits, contractsChanged);
+            staffContracts = new ContractsPanel("Staff", true, contractEdits, contractsChanged);
+            tabs.TabPages.Add(NestedTabs("Contracts", playerContracts, staffContracts));
 
-            BuildFinanceTab();
-            BuildContractsTab();
+            Action attributesChanged = delegate { };
+            playerAttributes = new AttributesPanel("Players", false, ScoutFields.Set, playerAttributeEdits, attributesChanged);
+            staffAttributes = new AttributesPanel("Staff", true, StaffFields.Set, staffAttributeEdits, attributesChanged);
+            tabs.TabPages.Add(NestedTabs("Attributes", playerAttributes, staffAttributes));
+            BuildPeopleTab();
             BuildSubstitutesTab();
+            Theme.StyleTabs(tabs);
 
+            scoutTabs = new TabControl { Dock = DockStyle.Fill, Visible = false };
+            playerScouting = new ScoutingPanel("Players", "players", ScoutFields.Set, "Plays as", null);
+            scoutTabs.TabPages.Add(playerScouting);
+            staffScouting = new ScoutingPanel("Staff", "staff", StaffFields.Set, "Job", StaffFields.Jobs);
+            scoutTabs.TabPages.Add(staffScouting);
+            playerScouting.ShowHiddenChanged += delegate { staffScouting.ShowHidden = playerScouting.ShowHidden; };
+            staffScouting.ShowHiddenChanged += delegate { playerScouting.ShowHidden = staffScouting.ShowHidden; };
+            Theme.StyleTabs(scoutTabs);
+
+            BuildWelcome();
+            patcher = new PatcherPanel { Dock = DockStyle.Fill, Visible = false };
+            body.Controls.Add(patcher);
+            body.Controls.Add(welcome);
+            body.Controls.Add(tabs);
+            body.Controls.Add(scoutTabs);
+
+            // writing the changes (the editing tabs only)
+            footer = new Panel { Dock = DockStyle.Bottom, Height = 74, BackColor = Theme.DarkNavy, Visible = false };
             checkBoxOverwrite = new CheckBox
             {
                 Text = "Overwrite this saved game (a .bak copy is made first). Otherwise a new file is saved next to it.",
-                Left = 12, Top = 610, AutoSize = true, Checked = false
+                Left = 16, Top = 8, AutoSize = true, Checked = false, ForeColor = Color.White
             };
-            Controls.Add(checkBoxOverwrite);
-
-            buttonApply = new Button { Text = "Apply", Left = 12, Top = 642, Width = 140, Height = 28, Enabled = false };
+            footer.Controls.Add(checkBoxOverwrite);
+            buttonApply = new Button { Text = "Apply", Left = 16, Top = 34, Width = 140, Height = 30, Enabled = false, Font = Theme.Bold };
             buttonApply.Click += buttonApply_Click;
-            Controls.Add(buttonApply);
-
+            footer.Controls.Add(buttonApply);
             labelNote = new Label
             {
-                Left = 164, Top = 638, Width = 344, Height = 64,
-                Text = "Close the game first. Everything you have changed on both tabs is written in one go."
+                Left = 172, Top = 34, Width = 900, Height = 34, ForeColor = StatusColor,
+                Text = "Close the game first. Everything you have changed on the Clubs, Competitions, Contracts, Attributes, People and Substitutes tabs is written in one go."
             };
-            Controls.Add(labelNote);
+            footer.Controls.Add(labelNote);
+
+            Controls.Add(body);
+            Controls.Add(footer);
+            Controls.Add(fileBar);
+            Controls.Add(header);
+
+            Theme.StyleButton(buttonBrowse, true);
+            Theme.StyleButton(buttonApply, true);
+            Theme.StyleButton(buttonPatcher, false);
+            Theme.StyleButton(buttonEditing, false);
+            Theme.StyleButton(buttonScouting, false);
+            Theme.StyleButton(buttonExit, true);
+            buttonBrowse.Tag = buttonApply.Tag = buttonPatcher.Tag = buttonEditing.Tag = buttonScouting.Tag = buttonExit.Tag = "styled";
+            Theme.Apply(this);
+            ShowMode(ModeHome);
+            if (startMode != ModeHome)
+                ShowMode(startMode);
         }
 
-        void BuildFinanceTab()
+        // The first screen: Editing or Scouting
+        void BuildWelcome()
         {
-            TabPage page = new TabPage("Club finances");
-            tabs.TabPages.Add(page);
-
-            page.Controls.Add(new Label { Text = "Find a club:", Left = 10, Top = 14, AutoSize = true });
-            textBoxFilter = new TextBox { Left = 80, Top = 10, Width = 200 };
-            textBoxFilter.TextChanged += delegate { FillClubs(); };
-            page.Controls.Add(textBoxFilter);
-
-            listClubs = new ListView
+            welcome = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Page };
+            labelWelcome = new Label
             {
-                Left = 10, Top = 38, Width = 468, Height = 200,
-                View = View.Details, FullRowSelect = true, HideSelection = false, MultiSelect = false, GridLines = true
+                Text = "What would you like to do?", Font = new Font("Arial", 18f, FontStyle.Bold), ForeColor = Theme.Navy, AutoSize = true
             };
-            listClubs.Columns.Add("Club", 210);
-            listClubs.Columns.Add("Balance", 120, HorizontalAlignment.Right);
-            listClubs.Columns.Add("New balance", 120, HorizontalAlignment.Right);
-            listClubs.SelectedIndexChanged += delegate { ShowSelectedClub(); };
-            page.Controls.Add(listClubs);
-
-            page.Controls.Add(new Label { Text = "Balance:", Left = 10, Top = 252, AutoSize = true });
-            numericBalance = new NumericUpDown
+            labelHint = new Label
             {
-                Left = 66, Top = 248, Width = 130, Minimum = -MaxBalance, Maximum = MaxBalance,
-                ThousandsSeparator = true, Increment = 100000, Enabled = false
+                Text = "Editing and Scouting work on a saved game: pick one with Browse above (or choose and you will be asked). Close the game first when editing or patching.",
+                ForeColor = Color.FromArgb(70, 70, 100), AutoSize = true
             };
-            page.Controls.Add(numericBalance);
-            buttonSetBalance = new Button { Text = "Set", Left = 204, Top = 246, Width = 50, Enabled = false };
-            buttonSetBalance.Click += delegate { SetSelectedBalance(numericBalance.Value); };
-            page.Controls.Add(buttonSetBalance);
-
-            page.Controls.Add(new Label { Text = "Add:", Left = 268, Top = 252, AutoSize = true });
-            buttonAdd1 = new Button { Text = "+1m", Left = 300, Top = 246, Width = 52, Enabled = false };
-            buttonAdd10 = new Button { Text = "+10m", Left = 356, Top = 246, Width = 52, Enabled = false };
-            buttonAdd50 = new Button { Text = "+50m", Left = 412, Top = 246, Width = 52, Enabled = false };
-            buttonAdd1.Click += delegate { AddToSelectedBalance(1000000m); };
-            buttonAdd10.Click += delegate { AddToSelectedBalance(10000000m); };
-            buttonAdd50.Click += delegate { AddToSelectedBalance(50000000m); };
-            page.Controls.Add(buttonAdd1);
-            page.Controls.Add(buttonAdd10);
-            page.Controls.Add(buttonAdd50);
-
-            labelEdits = new Label { Left = 10, Top = 284, Width = 380, Height = 18, Text = "" };
-            page.Controls.Add(labelEdits);
-            buttonClearEdits = new Button { Text = "Clear all", Left = 404, Top = 280, Width = 74, Enabled = false };
-            buttonClearEdits.Click += delegate { edits.Clear(); FillClubs(); UpdateEdits(); };
-            page.Controls.Add(buttonClearEdits);
-
-            page.Controls.Add(new Label
+            tiles = new Panel { Width = 960, Height = 130, BackColor = Theme.Page };
+            Tile patching = new Tile
             {
-                Left = 10, Top = 312, Width = 468, Height = 64,
-                Text = "Transfer Funds aren't stored in the save: the game works them out from the balance (and the club's wages and " +
-                       "reputation), so give a club a bigger balance to give it more to spend. In one test a club's Transfer Funds went " +
-                       "from 30,000 to 2,300,000 when its balance went from 297,435 to 5,297,435."
-            });
+                Left = 0, Top = 0, Width = 306, Height = 130, Title = "PATCHER"
+            };
+            Tile editing = new Tile
+            {
+                Left = 327, Top = 0, Width = 306, Height = 130, Title = "EDITING"
+            };
+            Tile scouting = new Tile
+            {
+                Left = 654, Top = 0, Width = 306, Height = 130, Title = "SCOUTING"
+            };
+            patching.Click += delegate { ChooseMode(ModePatcher); };
+            editing.Click += delegate { ChooseMode(ModeEditing); };
+            scouting.Click += delegate { ChooseMode(ModeScouting); };
+            tiles.Controls.Add(patching);
+            tiles.Controls.Add(editing);
+            tiles.Controls.Add(scouting);
+            welcome.Controls.Add(labelWelcome);
+            welcome.Controls.Add(tiles);
+            welcome.Controls.Add(labelHint);
+            welcome.Resize += delegate
+            {
+                int center = welcome.ClientSize.Width / 2;
+                int top = Math.Max(20, (welcome.ClientSize.Height - 320) / 2);
+                labelWelcome.Left = center - labelWelcome.Width / 2;
+                labelWelcome.Top = top;
+                tiles.Left = center - tiles.Width / 2;
+                tiles.Top = top + 60;
+                labelHint.Left = center - labelHint.Width / 2;
+                labelHint.Top = tiles.Bottom + 20;
+            };
         }
 
-        void BuildContractsTab()
+        bool HasChanges()
         {
-            TabPage page = new TabPage("Contracts");
-            tabs.TabPages.Add(page);
-
-            page.Controls.Add(new Label { Text = "Find a player or club:", Left = 10, Top = 14, AutoSize = true });
-            textBoxContractFilter = new TextBox { Left = 130, Top = 10, Width = 170 };
-            textBoxContractFilter.TextChanged += delegate { FillContracts(); };
-            page.Controls.Add(textBoxContractFilter);
-            checkBoxOnlyClauses = new CheckBox { Text = "Only with clauses", Left = 316, Top = 12, AutoSize = true };
-            checkBoxOnlyClauses.CheckedChanged += delegate { FillContracts(); };
-            page.Controls.Add(checkBoxOnlyClauses);
-
-            listContracts = new ListView
-            {
-                Left = 10, Top = 38, Width = 468, Height = 130,
-                View = View.Details, FullRowSelect = true, HideSelection = false, MultiSelect = false, GridLines = true
-            };
-            listContracts.Columns.Add("Player", 120);
-            listContracts.Columns.Add("Club", 100);
-            listContracts.Columns.Add("Per month", 70, HorizontalAlignment.Right);
-            listContracts.Columns.Add("Expires", 60);
-            listContracts.Columns.Add("Clauses", 100);
-            listContracts.SelectedIndexChanged += delegate { ShowSelectedContract(); };
-            page.Controls.Add(listContracts);
-
-            labelContractCount = new Label { Left = 10, Top = 170, Width = 468, Height = 16, Text = "" };
-            page.Controls.Add(labelContractCount);
-
-            GroupBox group = new GroupBox { Text = "The selected contract", Left = 10, Top = 188, Width = 468, Height = 262 };
-            page.Controls.Add(group);
-
-            group.Controls.Add(new Label { Text = "Type:", Left = 10, Top = 24, AutoSize = true });
-            comboPartFull = new ComboBox { Left = 70, Top = 20, Width = 90, DropDownStyle = ComboBoxStyle.DropDownList, Enabled = false };
-            comboPartFull.Items.AddRange(new object[] { "Full Time", "Part Time" });
-            group.Controls.Add(comboPartFull);
-            comboKind = new ComboBox { Left = 168, Top = 20, Width = 150, DropDownStyle = ComboBoxStyle.DropDownList, Enabled = false };
-            comboKind.Items.AddRange(KindNames);
-            group.Controls.Add(comboKind);
-
-            group.Controls.Add(new Label { Text = "Wages per month:", Left = 10, Top = 52, AutoSize = true });
-            numericWage = new NumericUpDown { Left = 120, Top = 48, Width = 100, Minimum = 0, Maximum = 500000000, ThousandsSeparator = true, Increment = 1000, Enabled = false };
-            group.Controls.Add(numericWage);
-            group.Controls.Add(new Label { Text = "Expires:", Left = 250, Top = 52, AutoSize = true });
-            dateExpiry = new DateTimePicker
-            {
-                Left = 304, Top = 48, Width = 90, Format = DateTimePickerFormat.Custom, CustomFormat = "d.M.yy",
-                MinDate = new DateTime(1900, 1, 1), MaxDate = new DateTime(2099, 12, 31), Enabled = false
-            };
-            group.Controls.Add(dateExpiry);
-
-            group.Controls.Add(new Label { Text = "Squad status:", Left = 10, Top = 80, AutoSize = true });
-            comboStatus = new ComboBox { Left = 100, Top = 76, Width = 250, DropDownStyle = ComboBoxStyle.DropDownList, Enabled = false };
-            comboStatus.Items.AddRange(StatusNames);
-            group.Controls.Add(comboStatus);
-
-            group.Controls.Add(new Label { Text = "Bonuses (the game rounds what it shows):", Left = 10, Top = 108, AutoSize = true });
-            for (int t = 0; t < SaveGameFile.BonusTypes; t++)
-            {
-                checkBoxBonus[t] = new CheckBox { Text = BonusNames[t], Left = 20, Top = 128 + t * 24, Width = 130, Enabled = false };
-                numericBonus[t] = new NumericUpDown { Left = 154, Top = 126 + t * 24, Width = 90, Minimum = 0, Maximum = 2000000000, ThousandsSeparator = true, Increment = 10, Enabled = false };
-                group.Controls.Add(checkBoxBonus[t]);
-                group.Controls.Add(numericBonus[t]);
-            }
-
-            group.Controls.Add(new Label { Text = "Clauses:", Left = 270, Top = 108, AutoSize = true });
-            for (int t = 0; t < SaveGameFile.ClauseTypes; t++)
-            {
-                checkBoxClauses[t] = new CheckBox { Text = SaveGameFile.ClauseNames[t], Left = 270, Top = 126 + t * 20, Width = 190, Enabled = false };
-                group.Controls.Add(checkBoxClauses[t]);
-            }
-
-            group.Controls.Add(new Label { Text = "Release fee (shared by the clauses):", Left = 10, Top = 232, AutoSize = true });
-            numericFee = new NumericUpDown { Left = 200, Top = 228, Width = 110, Minimum = 0, Maximum = 2000000000, ThousandsSeparator = true, Increment = 10000, Enabled = false };
-            group.Controls.Add(numericFee);
-            buttonSetContract = new Button { Text = "Set", Left = 330, Top = 226, Width = 60, Enabled = false };
-            buttonSetContract.Click += delegate { SetSelectedContract(); };
-            group.Controls.Add(buttonSetContract);
-
-            labelContractEdits = new Label { Left = 10, Top = 462, Width = 380, Height = 18, Text = "" };
-            page.Controls.Add(labelContractEdits);
-            buttonClearContracts = new Button { Text = "Clear all", Left = 404, Top = 458, Width = 74, Enabled = false };
-            buttonClearContracts.Click += delegate { contractEdits.Clear(); FillContracts(); UpdateContractEdits(); };
-            page.Controls.Add(buttonClearContracts);
+            return edits.Count > 0 || contractEdits.Count > 0 || competitionEdits.Count > 0 || newPeople.Count > 0 || removedPeople.Count > 0 || playerAttributeEdits.Count > 0 || staffAttributeEdits.Count > 0;
         }
 
-        static string ClauseText(byte[] flags)
+        // Asks first: changes that were set but not applied are lost
+        void ExitApplication()
         {
-            StringBuilder text = new StringBuilder();
-            for (int t = 0; t < flags.Length; t++)
+            string question = "Are you sure you want to exit?";
+            if (HasChanges())
+                question += "\n\nYou have changes that haven't been applied yet. They will be lost.";
+            if (MessageBox.Show(this, question, Text, MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) == DialogResult.Yes)
+                Close();
+        }
+
+        // From the first screen or the title bar: asks for a saved game first if there isn't one yet
+        void ChooseMode(int mode)
+        {
+            if ((mode == ModeEditing || mode == ModeScouting) && save == null && textBoxFile.Text.Length == 0)
+                buttonBrowse_Click(null, EventArgs.Empty);
+            ShowMode(mode);
+        }
+
+        void ShowMode(int mode)
+        {
+            welcome.Visible = mode == ModeHome;
+            patcher.Visible = mode == ModePatcher;
+            tabs.Visible = mode == ModeEditing;
+            scoutTabs.Visible = mode == ModeScouting;
+            footer.Visible = mode == ModeEditing;
+            fileBar.Visible = mode != ModePatcher;      // the patcher picks cm3.exe, not a saved game
+            ModeButton(buttonPatcher, mode == ModePatcher);
+            ModeButton(buttonEditing, mode == ModeEditing);
+            ModeButton(buttonScouting, mode == ModeScouting);
+        }
+
+        static void ModeButton(Button button, bool active)
+        {
+            button.BackColor = active ? Theme.Yellow : Theme.Navy;
+            button.ForeColor = active ? Theme.Navy : Theme.Yellow;
+        }
+
+        // A tab with two tabs inside
+        static TabPage NestedTabs(string title, TabPage first, TabPage second)
+        {
+            TabPage page = new TabPage(title);
+            TabControl inner = new TabControl { Dock = DockStyle.Fill };
+            inner.TabPages.Add(first);
+            inner.TabPages.Add(second);
+            Theme.StyleTabs(inner);
+            inner.ItemSize = new Size(110, 26);
+            page.Controls.Add(inner);
+            return page;
+        }
+
+        // The list takes all the room there is: the controls above it stay at the top, the ones below it at the bottom
+        internal static void StretchList(TabPage page, ListView list)
+        {
+            Panel top = new Panel { Dock = DockStyle.Top, Height = list.Top };
+            Panel bottom = new Panel { Dock = DockStyle.Bottom };
+            int listBottom = list.Bottom;
+            int lowest = listBottom;
+
+            List<Control> above = new List<Control>();
+            List<Control> below = new List<Control>();
+            foreach (Control control in page.Controls)
             {
-                if (flags[t] == 0)
+                if (control == list)
                     continue;
-                if (text.Length > 0)
-                    text.Append(", ");
-                text.Append(ShortClauseNames[t]);
+                (control.Top < list.Top ? above : below).Add(control);
             }
-            return text.Length == 0 ? "" : text.ToString();
-        }
-
-        // day of the year (counted from 0) and year <-> a date
-        static DateTime ExpiryDate(int day, int year)
-        {
-            try
+            foreach (Control control in above)
             {
-                return new DateTime(Math.Max(1900, Math.Min(2099, year)), 1, 1).AddDays(day);
+                page.Controls.Remove(control);
+                top.Controls.Add(control);
             }
-            catch (ArgumentException)
+            foreach (Control control in below)
             {
-                return new DateTime(1999, 1, 1);
+                page.Controls.Remove(control);
+                control.Top -= listBottom;
+                bottom.Controls.Add(control);
+                lowest = Math.Max(lowest, control.Bottom + listBottom);
             }
-        }
+            bottom.Height = lowest - listBottom + 6;
 
-        static int KindIndex(int typeByte)
-        {
-            return Array.IndexOf(KindValues, typeByte & 0x3F);
-        }
-
-        // The editor's controls as an edit of the contract
-        SaveGameFile.ContractEdit EditFromControls(SaveGameFile.Contract contract)
-        {
-            SaveGameFile.ContractEdit edit = contract.ToEdit();
-
-            // contract type: keep the game's own value if the kind wasn't changed (e.g. 7 is also a loan)
-            int low = contract.TypeByte & 0x3F;
-            if (comboKind.SelectedIndex >= 0 && comboKind.SelectedIndex != KindIndex(contract.TypeByte))
-                low = KindValues[comboKind.SelectedIndex];
-            edit.TypeByte = (byte)((contract.TypeByte & 0x40) | (comboPartFull.SelectedIndex == 1 ? 0x80 : 0) | low);
-
-            edit.Wage = (int)Math.Round((double)numericWage.Value / 4.0);
-            DateTime date = dateExpiry.Value.Date;
-            edit.ExpiryYear = date.Year;
-            edit.ExpiryDay = (date - new DateTime(date.Year, 1, 1)).Days;
-
-            if (comboStatus.SelectedIndex >= 0)
-                edit.StatusByte = (byte)((contract.StatusByte & 0x0F) | (comboStatus.SelectedIndex << 4));
-
-            for (int t = 0; t < SaveGameFile.BonusTypes; t++)
-                edit.Bonuses[t] = checkBoxBonus[t].Checked ? (int)numericBonus[t].Value : -1;
-
-            bool any = false;
-            for (int t = 0; t < SaveGameFile.ClauseTypes; t++)
-            {
-                // keep the game's own state (e.g. "triggered") for a clause that stays, a new clause starts as 1
-                edit.Flags[t] = !checkBoxClauses[t].Checked ? (byte)0 : (contract.Flags[t] != 0 ? contract.Flags[t] : (byte)1);
-                if (edit.Flags[t] != 0)
-                    any = true;
-            }
-            edit.Fee = any ? (int)numericFee.Value : 0;
-            return edit;
-        }
-
-        void FillContracts()
-        {
-            string filter = textBoxContractFilter.Text.Trim();
-            int selected = SelectedContractRecord();
-            int matches = 0;
-
-            listContracts.BeginUpdate();
-            listContracts.Items.Clear();
-            foreach (SaveGameFile.Contract contract in contracts)
-            {
-                if (checkBoxOnlyClauses.Checked && !contract.HasClauses)
-                    continue;
-                if (filter.Length > 0 && contract.Name.IndexOf(filter, StringComparison.CurrentCultureIgnoreCase) < 0 &&
-                    contract.Club.IndexOf(filter, StringComparison.CurrentCultureIgnoreCase) < 0)
-                    continue;
-                matches++;
-                if (matches > MaxListedContracts && contract.Record != selected)
-                    continue;
-
-                SaveGameFile.ContractEdit edit;
-                bool edited = contractEdits.TryGetValue(contract.Record, out edit);
-                int wage = edited ? edit.Wage : contract.Wage;
-                DateTime expiry = edited ? ExpiryDate(edit.ExpiryDay, edit.ExpiryYear) : ExpiryDate(contract.ExpiryDay, contract.ExpiryYear);
-
-                ListViewItem item = new ListViewItem(contract.Name);
-                item.SubItems.Add(contract.Club);
-                item.SubItems.Add(Money((long)wage * 4));
-                item.SubItems.Add(expiry.ToString("d.M.yy"));
-                item.SubItems.Add(ClauseText(edited ? edit.Flags : contract.Flags));
-                item.Tag = contract;
-                if (edited)
-                    item.BackColor = Color.LightYellow;
-                listContracts.Items.Add(item);
-                if (contract.Record == selected)
-                    item.Selected = true;
-            }
-            listContracts.EndUpdate();
-
-            labelContractCount.Text = matches > MaxListedContracts
-                ? string.Format("Showing the first {0} of {1} contracts - type a name or club to narrow it down.", MaxListedContracts, matches)
-                : string.Format("{0} contract(s).", matches);
-        }
-
-        int SelectedContractRecord()
-        {
-            if (listContracts.SelectedItems.Count == 0)
-                return -1;
-            return ((SaveGameFile.Contract)listContracts.SelectedItems[0].Tag).Record;
-        }
-
-        void ShowSelectedContract()
-        {
-            bool any = listContracts.SelectedItems.Count > 0;
-            comboPartFull.Enabled = comboKind.Enabled = numericWage.Enabled = dateExpiry.Enabled = comboStatus.Enabled = any;
-            numericFee.Enabled = buttonSetContract.Enabled = any;
-            foreach (CheckBox box in checkBoxBonus)
-                box.Enabled = any;
-            foreach (NumericUpDown box in numericBonus)
-                box.Enabled = any;
-            foreach (CheckBox box in checkBoxClauses)
-                box.Enabled = any;
-            if (!any)
-                return;
-
-            SaveGameFile.Contract contract = (SaveGameFile.Contract)listContracts.SelectedItems[0].Tag;
-            SaveGameFile.ContractEdit edit;
-            if (!contractEdits.TryGetValue(contract.Record, out edit))
-                edit = contract.ToEdit();
-
-            comboPartFull.SelectedIndex = (edit.TypeByte & 0x80) != 0 ? 1 : 0;
-            comboKind.SelectedIndex = KindIndex(edit.TypeByte);
-            numericWage.Value = Math.Min(numericWage.Maximum, Math.Max(numericWage.Minimum, (decimal)edit.Wage * 4));
-            dateExpiry.Value = ExpiryDate(edit.ExpiryDay, edit.ExpiryYear);
-            int status = edit.StatusByte >> 4;
-            comboStatus.SelectedIndex = status < StatusNames.Length ? status : -1;
-            for (int t = 0; t < SaveGameFile.BonusTypes; t++)
-            {
-                checkBoxBonus[t].Checked = edit.Bonuses[t] >= 0;
-                numericBonus[t].Value = Math.Min(numericBonus[t].Maximum, Math.Max(numericBonus[t].Minimum, edit.Bonuses[t]));
-            }
-            for (int t = 0; t < SaveGameFile.ClauseTypes; t++)
-                checkBoxClauses[t].Checked = edit.Flags[t] != 0;
-            numericFee.Value = Math.Min(numericFee.Maximum, Math.Max(numericFee.Minimum, edit.Fee));
-        }
-
-        void SetSelectedContract()
-        {
-            if (listContracts.SelectedItems.Count == 0)
-                return;
-            SaveGameFile.Contract contract = (SaveGameFile.Contract)listContracts.SelectedItems[0].Tag;
-            SaveGameFile.ContractEdit edit = EditFromControls(contract);
-
-            if (edit.SameAs(contract))
-                contractEdits.Remove(contract.Record);
-            else
-                contractEdits[contract.Record] = edit;
-            FillContracts();
-            UpdateContractEdits();
-        }
-
-        void UpdateContractEdits()
-        {
-            labelContractEdits.Text = contractEdits.Count == 0 ? "No contracts changed yet." : string.Format("{0} contract(s) changed, not saved yet.", contractEdits.Count);
-            buttonClearContracts.Enabled = contractEdits.Count > 0;
+            page.Controls.Add(top);
+            page.Controls.Add(bottom);
+            list.Anchor = AnchorStyles.None;
+            list.Dock = DockStyle.Fill;
+            list.BringToFront();
         }
 
         void BuildSubstitutesTab()
@@ -460,7 +360,7 @@ namespace CM3SaveGameEditor
 
             textBoxSummary = new TextBox
             {
-                Left = 10, Top = 98, Width = 468, Height = 270,
+                Left = 10, Top = 98, Width = 468, Height = 270, Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
                 Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, BackColor = SystemColors.Window
             };
             page.Controls.Add(textBoxSummary);
@@ -473,6 +373,8 @@ namespace CM3SaveGameEditor
                 @"VirtualStore\Program Files (x86)\Championship Manager 3");
             if (Directory.Exists(virtualStore))
                 return virtualStore;
+            if (Directory.Exists(@"E:\Championship Manager 3"))
+                return @"E:\Championship Manager 3";
             string install = Path.Combine(Environment.GetEnvironmentVariable("ProgramFiles(x86)") ?? "", "Championship Manager 3");
             return Directory.Exists(install) ? install : null;
         }
@@ -499,16 +401,29 @@ namespace CM3SaveGameEditor
             edits.Clear();
             contracts.Clear();
             contractEdits.Clear();
+            playerScouting.SetPeople(new List<ScoutPlayer>());
+            staffScouting.SetPeople(new List<ScoutPlayer>());
             buttonApply.Enabled = false;
-            labelStatus.ForeColor = SystemColors.ControlText;
+            labelStatus.ForeColor = StatusColor;
             labelStatus.Text = "";
             textBoxSummary.Text = "";
             listClubs.Items.Clear();
-            listContracts.Items.Clear();
+            competitionEdits.Clear();
+            competitions.Clear();
+            FillCompetitions();
+            ShowSelectedCompetition();
+            UpdateCompetitionEdits();
+            playerAttributeEdits.Clear();
+            staffAttributeEdits.Clear();
+            playerAttributes.SetPeople(new List<ScoutPlayer>());
+            staffAttributes.SetPeople(new List<ScoutPlayer>());
+            SetPeopleLists(new List<ScoutPlayer>(), new List<ScoutPlayer>());
+            playerContracts.SetClubs(clubs);
+            staffContracts.SetClubs(clubs);
+            playerContracts.SetContracts(contracts);
+            staffContracts.SetContracts(contracts);
             UpdateEdits();
-            UpdateContractEdits();
             ShowSelectedClub();
-            ShowSelectedContract();
             if (!File.Exists(textBoxFile.Text))
                 return;
 
@@ -541,9 +456,23 @@ namespace CM3SaveGameEditor
 
                 contracts = save.Contracts(false);
                 contracts.Sort(delegate(SaveGameFile.Contract a, SaveGameFile.Contract b) { return string.Compare(a.Name, b.Name, StringComparison.CurrentCultureIgnoreCase); });
-                FillContracts();
+                playerContracts.SetClubs(clubs);
+                staffContracts.SetClubs(clubs);
+                playerContracts.SetContracts(contracts);
+                staffContracts.SetContracts(contracts);
 
-                labelStatus.Text = string.Format("{0} sub-files, {1:0.0} MB, {2} clubs, {3} contracts", save.Entries.Count, new FileInfo(textBoxFile.Text).Length / 1048576.0, clubs.Count, contracts.Count);
+                competitions = save.Competitions();
+                FillCompetitions();
+
+                List<ScoutPlayer> players = save.Players();
+                playerScouting.SetPeople(players);
+                playerAttributes.SetPeople(players);
+                List<ScoutPlayer> staffMembers = save.StaffMembers();
+                staffScouting.SetPeople(staffMembers);
+                staffAttributes.SetPeople(staffMembers);
+                SetPeopleLists(players, staffMembers);
+
+                labelStatus.Text = string.Format("{0} sub-files, {1:0.0} MB, {2} clubs, {3} contracts, {4} players, {5} staff", save.Entries.Count, new FileInfo(textBoxFile.Text).Length / 1048576.0, clubs.Count, contracts.Count, players.Count, staffMembers.Count);
                 buttonApply.Enabled = true;
             }
             catch (Exception ex)
@@ -551,7 +480,11 @@ namespace CM3SaveGameEditor
                 save = null;
                 clubs.Clear();
                 contracts.Clear();
-                labelStatus.ForeColor = Color.Firebrick;
+                playerScouting.SetPeople(new List<ScoutPlayer>());
+                staffScouting.SetPeople(new List<ScoutPlayer>());
+                playerAttributes.SetPeople(new List<ScoutPlayer>());
+                staffAttributes.SetPeople(new List<ScoutPlayer>());
+                labelStatus.ForeColor = Color.Salmon;
                 labelStatus.Text = "Couldn't read this saved game: " + ex.Message;
             }
             finally
@@ -560,89 +493,28 @@ namespace CM3SaveGameEditor
             }
         }
 
-        static string Money(long amount)
+        internal static string Money(long amount)
         {
             return amount.ToString("N0", CultureInfo.CurrentCulture);
         }
 
-        // The clubs matching the filter
-        void FillClubs()
+        // After writing: what was changed has to be in the file the way it was asked for (the attributes the game scales with the
+        // current ability can differ a little: the editor can't always hit the number exactly)
+        static void CheckAttributes(Dictionary<int, int[]> wanted, Dictionary<int, ScoutPlayer> now, ScoutFieldSet set, bool player)
         {
-            string filter = textBoxFilter.Text.Trim();
-            int selectedId = SelectedClubId();
-
-            listClubs.BeginUpdate();
-            listClubs.Items.Clear();
-            foreach (SaveGameFile.Club club in clubs)
+            foreach (KeyValuePair<int, int[]> pair in wanted)
             {
-                if (filter.Length > 0 && club.Name.IndexOf(filter, StringComparison.CurrentCultureIgnoreCase) < 0)
-                    continue;
-                ListViewItem item = new ListViewItem(club.Name);
-                item.SubItems.Add(Money(club.Balance));
-                long edited;
-                item.SubItems.Add(edits.TryGetValue(club.Id, out edited) ? Money(edited) : "");
-                item.Tag = club;
-                listClubs.Items.Add(item);
-                if (club.Id == selectedId)
-                    item.Selected = true;
+                ScoutPlayer person;
+                if (!now.TryGetValue(pair.Key, out person))
+                    throw new InvalidDataException("The saved game was written but the check afterwards failed - don't use it.");
+                for (int f = 0; f < set.All.Length; f++)
+                {
+                    if (f == ScoutFieldSet.Age || f == ScoutFieldSet.Wage || (player && ScoutFields.IsScaled(f)))
+                        continue;
+                    if (person.Values[f] != pair.Value[f])
+                        throw new InvalidDataException("The saved game was written but the check afterwards failed - don't use it.");
+                }
             }
-            listClubs.EndUpdate();
-        }
-
-        int SelectedClubId()
-        {
-            if (listClubs.SelectedItems.Count == 0)
-                return -1;
-            return ((SaveGameFile.Club)listClubs.SelectedItems[0].Tag).Id;
-        }
-
-        void ShowSelectedClub()
-        {
-            bool any = listClubs.SelectedItems.Count > 0;
-            numericBalance.Enabled = buttonSetBalance.Enabled = buttonAdd1.Enabled = buttonAdd10.Enabled = buttonAdd50.Enabled = any;
-            if (!any)
-                return;
-
-            SaveGameFile.Club club = (SaveGameFile.Club)listClubs.SelectedItems[0].Tag;
-            long balance;
-            if (!edits.TryGetValue(club.Id, out balance))
-                balance = club.Balance;
-            numericBalance.Value = Math.Max(numericBalance.Minimum, Math.Min(numericBalance.Maximum, balance));
-        }
-
-        void SetSelectedBalance(decimal value)
-        {
-            if (listClubs.SelectedItems.Count == 0)
-                return;
-            ListViewItem item = listClubs.SelectedItems[0];
-            SaveGameFile.Club club = (SaveGameFile.Club)item.Tag;
-            long balance = (long)Math.Max(-MaxBalance, Math.Min(MaxBalance, value));
-
-            if (balance == club.Balance)
-            {
-                edits.Remove(club.Id);
-                item.SubItems[2].Text = "";
-            }
-            else
-            {
-                edits[club.Id] = balance;
-                item.SubItems[2].Text = Money(balance);
-            }
-            numericBalance.Value = balance;
-            UpdateEdits();
-        }
-
-        void AddToSelectedBalance(decimal amount)
-        {
-            if (listClubs.SelectedItems.Count == 0)
-                return;
-            SetSelectedBalance(numericBalance.Value + amount);
-        }
-
-        void UpdateEdits()
-        {
-            labelEdits.Text = edits.Count == 0 ? "No balances changed yet." : string.Format("{0} club balance(s) changed, not saved yet.", edits.Count);
-            buttonClearEdits.Enabled = edits.Count > 0;
         }
 
         void buttonApply_Click(object sender, EventArgs e)
@@ -651,11 +523,17 @@ namespace CM3SaveGameEditor
                 return;
 
             bool changeSubs = checkBoxSubs.Checked;
-            if (!changeSubs && edits.Count == 0 && contractEdits.Count == 0)
+            if (!changeSubs && !HasChanges())
             {
-                MessageBox.Show(this, "There is nothing to change yet: set a club's balance, change a contract, or tick the substitutes option.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(this, "There is nothing to change yet: change a club, a contract, a competition, someone's attributes or the people in the game, or tick the substitutes option.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
+
+            if (removedPeople.Count > 0 &&
+                MessageBox.Show(this, string.Format("You are about to remove {0} player(s) / staff from the game. This can't be undone once it is written" +
+                    (checkBoxOverwrite.Checked ? " (and you chose to overwrite the saved game; only the .bak copy keeps them)." : " (the original saved game is kept as it is).") +
+                    "\n\nContinue?", removedPeople.Count), Text, MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+                return;
 
             string source = textBoxFile.Text;
             int named = (int)numericNamed.Value;
@@ -673,13 +551,21 @@ namespace CM3SaveGameEditor
             try
             {
                 Dictionary<SaveGameFile.Entry, byte[]> replaced = new Dictionary<SaveGameFile.Entry, byte[]>();
-                int fixtures = 0, fixturesChanged = 0, balancesChanged = 0, contractsChanged = 0;
+                int fixtures = 0, fixturesChanged = 0, balancesChanged = 0, contractsChanged = 0, attributesChanged = 0, competitionsChanged = 0, peopleAdded = 0, peopleRemoved = 0;
                 if (changeSubs)
                     fixturesChanged = save.ReplaceSubstitutes(named, used, replaced, out fixtures);
                 if (edits.Count > 0)
-                    balancesChanged = save.ReplaceBalances(edits, replaced);
+                    balancesChanged = save.ReplaceClubs(edits, replaced);
                 if (contractEdits.Count > 0)
                     contractsChanged = save.ReplaceContracts(contractEdits, replaced);
+                if (competitionEdits.Count > 0)
+                    competitionsChanged = save.ReplaceCompetitions(competitionEdits, replaced);
+                if (newPeople.Count > 0)
+                    peopleAdded = save.AddPeople(newPeople, replaced);
+                if (removedPeople.Count > 0)
+                    peopleRemoved = save.RemovePeople(new List<int>(removedPeople.Keys), replaced);
+                if (playerAttributeEdits.Count > 0 || staffAttributeEdits.Count > 0)
+                    attributesChanged = save.ReplaceAttributes(playerAttributeEdits, staffAttributeEdits, replaced);
 
                 string written = overwrite ? source + ".new" : target;
                 save.WriteFile(written, replaced);
@@ -699,13 +585,13 @@ namespace CM3SaveGameEditor
                 }
                 if (edits.Count > 0)
                 {
-                    Dictionary<int, long> now = new Dictionary<int, long>();
+                    Dictionary<int, SaveGameFile.Club> now = new Dictionary<int, SaveGameFile.Club>();
                     foreach (SaveGameFile.Club club in check.Clubs())
-                        now[club.Id] = club.Balance;
-                    foreach (KeyValuePair<int, long> pair in edits)
+                        now[club.Id] = club;
+                    foreach (KeyValuePair<int, SaveGameFile.ClubEdit> pair in edits)
                     {
-                        long balance;
-                        if (!now.TryGetValue(pair.Key, out balance) || balance != pair.Value)
+                        SaveGameFile.Club club;
+                        if (!now.TryGetValue(pair.Key, out club) || !pair.Value.SameAs(club))
                             throw new InvalidDataException("The saved game was written but the check afterwards failed - don't use it.");
                     }
                 }
@@ -737,6 +623,52 @@ namespace CM3SaveGameEditor
                     }
                 }
 
+                if (newPeople.Count > 0 || removedPeople.Count > 0)
+                {
+                    List<ScoutPlayer> everyone = check.Players();
+                    everyone.AddRange(check.StaffMembers());
+                    foreach (NewPerson person in newPeople)
+                    {
+                        bool found = false;
+                        foreach (ScoutPlayer existing in everyone)
+                            if (existing.Name == person.Name && existing.Values[ScoutFieldSet.CurrentAbility] == person.CurrentAbility && existing.Club == person.ClubName)
+                                found = true;
+                        if (!found)
+                            throw new InvalidDataException("The saved game was written but the check afterwards failed - don't use it.");
+                    }
+                    foreach (ScoutPlayer existing in everyone)
+                        if (removedPeople.ContainsKey(existing.StaffId))
+                            throw new InvalidDataException("The saved game was written but the check afterwards failed - don't use it.");
+                }
+
+                if (competitionEdits.Count > 0)
+                {
+                    Dictionary<int, Competition> now = new Dictionary<int, Competition>();
+                    foreach (Competition competition in check.Competitions())
+                        now[competition.Id] = competition;
+                    foreach (KeyValuePair<int, CompetitionEdit> pair in competitionEdits)
+                    {
+                        Competition competition;
+                        if (!now.TryGetValue(pair.Key, out competition) || !pair.Value.SameAs(competition))
+                            throw new InvalidDataException("The saved game was written but the check afterwards failed - don't use it.");
+                    }
+                }
+
+                if (playerAttributeEdits.Count > 0)
+                {
+                    Dictionary<int, ScoutPlayer> now = new Dictionary<int, ScoutPlayer>();
+                    foreach (ScoutPlayer person in check.Players())
+                        now[person.StaffId] = person;
+                    CheckAttributes(playerAttributeEdits, now, ScoutFields.Set, true);
+                }
+                if (staffAttributeEdits.Count > 0)
+                {
+                    Dictionary<int, ScoutPlayer> now = new Dictionary<int, ScoutPlayer>();
+                    foreach (ScoutPlayer person in check.StaffMembers())
+                        now[person.StaffId] = person;
+                    CheckAttributes(staffAttributeEdits, now, StaffFields.Set, false);
+                }
+
                 if (overwrite)
                 {
                     string backup = source + ".bak";
@@ -750,9 +682,17 @@ namespace CM3SaveGameEditor
                 if (changeSubs)
                     message.AppendFormat("{0} of {1} fixtures now allow {2} named and {3} substitutions.", fixturesChanged, fixtures, named, used).AppendLine();
                 if (edits.Count > 0)
-                    message.AppendFormat("{0} club balance(s) changed.", balancesChanged).AppendLine();
+                    message.AppendFormat("{0} club(s) changed.", balancesChanged).AppendLine();
                 if (contractEdits.Count > 0)
                     message.AppendFormat("{0} contract(s) changed.", contractsChanged).AppendLine();
+                if (competitionEdits.Count > 0)
+                    message.AppendFormat("{0} competition(s) renamed.", competitionsChanged).AppendLine();
+                if (newPeople.Count > 0)
+                    message.AppendFormat("{0} new player(s) / staff added.", peopleAdded).AppendLine();
+                if (removedPeople.Count > 0)
+                    message.AppendFormat("{0} player(s) / staff removed.", peopleRemoved).AppendLine();
+                if (playerAttributeEdits.Count > 0 || staffAttributeEdits.Count > 0)
+                    message.AppendFormat("{0} player(s) / staff changed in their attributes.", attributesChanged).AppendLine();
                 message.AppendLine().AppendFormat("Saved as {0}", target);
                 if (overwrite)
                     message.AppendLine().AppendFormat("(the original is kept as {0}.bak)", source);

@@ -16,6 +16,10 @@
 // surface ends up exactly as it was. Text that has been painted over no longer matches and is simply not drawn.
 //
 // Positions, widths and spacing come from the game's own font data and text routines, so the layout is the original.
+//
+// The squad screen also gets a "Clear" button (next to Sort By): the game has no way to unselect the whole team except
+// clicking every position tag one by one, so the button does exactly that for you, with synthetic mouse clicks sent to
+// the game's own window procedure (so the game does all the work and redraws itself).
 
 #include <windows.h>
 #include <ddraw.h>
@@ -95,6 +99,8 @@ static bool g_attrBorder = false;             // outline the boxes of key attrib
 static bool g_attrByValue = true;           // colour by the attribute's value instead of by what matters for the position
 static const int ATTR_KEY_ABOVE = 14;       // by value: above this is "key"
 static const int ATTR_SECONDARY_FROM = 10;  // by value: this up to ATTR_KEY_ABOVE is "secondary", below it is "other"
+
+static bool g_clearEnabled = true;          // the squad screen's "Clear" button ([squad] clearbutton in the ini file)
 
 struct CachedFont { HFONT hfont; };
 static CachedFont g_hfonts[FONT_COUNT];
@@ -362,6 +368,8 @@ static void LoadConfig()
     ReadColour(path, L"secondarycolour", g_attrSecondaryColour);
     ReadColour(path, L"othercolour", g_attrOtherColour);
     ReadColour(path, L"bordercolour", g_attrBorderColour);
+
+    g_clearEnabled = GetPrivateProfileIntW(L"squad", L"clearbutton", 1, path) != 0;
 
     GetPrivateProfileStringW(L"text", L"quality", L"gray", value, 128, path);
     g_quality = (_wcsicmp(value, L"cleartype") == 0) ? CLEARTYPE_QUALITY : ANTIALIASED_QUALITY;
@@ -768,6 +776,228 @@ static void LinkAttributeRow(Item* item)
     }
 }
 
+// ---------------------------------------------------------------- the squad screen's "Clear" button
+
+static const int CLEAR_LEFT = 372, CLEAR_TOP = 126, CLEAR_RIGHT = 468, CLEAR_BOTTOM = 146;   // game pixels
+static const UINT_PTR CLEAR_TIMER = 0xC3A1;
+static const UINT CLEAR_INTERVAL = 45;                  // ms between the mouse messages of the clearing
+
+static HWND g_hwnd = NULL;                              // the game's window, once we have subclassed it
+static WNDPROC g_oldProc = NULL;
+static double g_viewScale = 0;                          // how the game's pixels map onto the window (from the last stretch)
+static int g_viewX = 0, g_viewY = 0;
+static std::vector<POINT> g_clearQueue;                 // window points to click, in order
+static bool g_clearDown = false;                        // the button is down (the next message is the release)
+static LPARAM g_clearPos = 0;
+static bool g_swallowUp = false;                        // our own press of the button is still down
+
+static bool ItemShown(const Item& it, SurfaceLock& surface)
+{
+    return it.lifted || (surface.ok && Equal(surface, it.bounds, it.baked));
+}
+
+static bool ScreenHasText(SurfaceLock& surface, const char* text)
+{
+    for (size_t i = 0; i < g_items.size(); i++)
+        if (g_items[i]->text == text && ItemShown(*g_items[i], surface))
+            return true;
+    return false;
+}
+
+// "GK", "DMC", "SB7"...: the position tags next to the players of the selected team (two columns: left and right list)
+static bool IsTagItem(const Item& it)
+{
+    const std::string& t = it.text;
+    if (t.size() < 2 || t.size() > 4)
+        return false;
+    for (size_t i = 0; i < t.size(); i++)
+        if (!((t[i] >= 'A' && t[i] <= 'Z') || (t[i] >= '0' && t[i] <= '9')))
+            return false;
+    int cx = (it.bounds.left + it.bounds.right) / 2;
+    int cy = (it.bounds.top + it.bounds.bottom) / 2;
+    bool column = (cx >= 108 && cx <= 152) || (cx >= 436 && cx <= 492);
+    return column && cy >= 218 && cy <= 560;     // (the green position buttons above the list are at about y 204: not tags)
+}
+
+// Is a squad list on the screen (View / Sort By / Filter buttons)?
+static bool SquadScreenShown(SurfaceLock& surface)
+{
+    return ScreenHasText(surface, "View") && ScreenHasText(surface, "Sort By") && ScreenHasText(surface, "Filter");
+}
+
+static bool OverClearButton(int x, int y)
+{
+    if (g_viewScale <= 0)
+        return false;
+    double gx = (x - g_viewX) / g_viewScale, gy = (y - g_viewY) / g_viewScale;
+    return gx >= CLEAR_LEFT && gx < CLEAR_RIGHT && gy >= CLEAR_TOP && gy < CLEAR_BOTTOM;
+}
+
+static void DrawClearButton(HDC hdc, double scale, int ox, int oy)
+{
+    int left = (int)floor(ox + CLEAR_LEFT * scale + 0.5), right = (int)floor(ox + CLEAR_RIGHT * scale + 0.5);
+    int top = (int)floor(oy + CLEAR_TOP * scale + 0.5), bottom = (int)floor(oy + CLEAR_BOTTOM * scale + 0.5);
+    int edge = max(1, (int)(scale / 1.5 + 0.5));
+
+    HBRUSH fill = CreateSolidBrush(RGB(150, 150, 150));
+    RECT r = { left, top, right, bottom };
+    FillRect(hdc, &r, fill);
+    DeleteObject(fill);
+
+    HBRUSH light = CreateSolidBrush(RGB(215, 215, 215)), dark = CreateSolidBrush(RGB(70, 70, 70));
+    RECT t = { left, top, right, top + edge }, l = { left, top, left + edge, bottom };
+    RECT b = { left, bottom - edge, right, bottom }, rr = { right - edge, top, right, bottom };
+    FillRect(hdc, &t, light);
+    FillRect(hdc, &l, light);
+    FillRect(hdc, &b, dark);
+    FillRect(hdc, &rr, dark);
+    DeleteObject(light);
+    DeleteObject(dark);
+
+    // the font of the other buttons of the screen
+    int font = 2;
+    for (size_t i = 0; i < g_items.size(); i++)
+        if (g_items[i]->text == "Sort By")
+            font = g_items[i]->font;
+    if (font < 0 || font >= FONT_COUNT || !g_fonts[font].ready)
+        return;
+
+    HGDIOBJ old = SelectObject(hdc, GetFont(hdc, font, scale));
+    SetTextColor(hdc, RGB(245, 245, 245));
+    SetTextAlign(hdc, TA_TOP | TA_LEFT | TA_NOUPDATECP);
+    RECT text = { left, top, right, bottom };
+    DrawTextW(hdc, L"Clear", -1, &text, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    SetTextAlign(hdc, TA_BASELINE | TA_LEFT | TA_NOUPDATECP);
+    SelectObject(hdc, old);
+}
+
+// The window points of the tags that are on the screen now
+static void CollectTags(SurfaceLock& surface, std::vector<POINT>& points)
+{
+    std::vector<const Item*> tags;
+    for (size_t i = 0; i < g_items.size(); i++)
+        if (IsTagItem(*g_items[i]) && ItemShown(*g_items[i], surface))
+            tags.push_back(g_items[i]);
+
+    // top to bottom, left list before right list
+    for (size_t i = 0; i < tags.size(); i++)
+        for (size_t j = i + 1; j < tags.size(); j++)
+        {
+            int yi = (tags[i]->bounds.top + tags[i]->bounds.bottom) / 2, yj = (tags[j]->bounds.top + tags[j]->bounds.bottom) / 2;
+            int xi = tags[i]->bounds.left, xj = tags[j]->bounds.left;
+            if (yj < yi - 3 || (abs(yj - yi) <= 3 && xj < xi))
+                std::swap(tags[i], tags[j]);
+        }
+
+    for (size_t i = 0; i < tags.size(); i++)
+    {
+        // the same tag can be on the list more than once (text drawn again a pixel away): click each cell once
+        bool again = false;
+        for (size_t j = 0; j < i && !again; j++)
+            if (abs((tags[i]->bounds.left + tags[i]->bounds.right) / 2 - (tags[j]->bounds.left + tags[j]->bounds.right) / 2) <= 14 &&
+                abs((tags[i]->bounds.top + tags[i]->bounds.bottom) / 2 - (tags[j]->bounds.top + tags[j]->bounds.bottom) / 2) <= 8)
+                again = true;
+        if (again)
+            continue;
+        POINT p;
+        p.x = (int)floor(g_viewX + (tags[i]->bounds.left + tags[i]->bounds.right) / 2.0 * g_viewScale + 0.5);
+        p.y = (int)floor(g_viewY + (tags[i]->bounds.top + tags[i]->bounds.bottom) / 2.0 * g_viewScale + 0.5);
+        points.push_back(p);
+    }
+}
+
+// One mouse message of the clearing; the game sees them like real ones
+static void ClearStep(HWND hwnd)
+{
+    if (g_clearDown)
+    {
+        CallWindowProcA(g_oldProc, hwnd, WM_LBUTTONUP, 0, g_clearPos);
+        g_clearDown = false;
+        return;
+    }
+    if (g_clearQueue.empty())
+    {
+        KillTimer(hwnd, CLEAR_TIMER);
+        // the mouse goes back to where the real pointer is
+        POINT pointer;
+        if (GetCursorPos(&pointer) && ScreenToClient(hwnd, &pointer))
+            CallWindowProcA(g_oldProc, hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(pointer.x, pointer.y));
+        return;
+    }
+    POINT p = g_clearQueue.front();
+    g_clearQueue.erase(g_clearQueue.begin());
+    g_clearPos = MAKELPARAM(p.x, p.y);
+    Log("clear: click %d,%d\n", p.x, p.y);
+    CallWindowProcA(g_oldProc, hwnd, WM_MOUSEMOVE, 0, g_clearPos);
+    CallWindowProcA(g_oldProc, hwnd, WM_LBUTTONDOWN, MK_LBUTTON, g_clearPos);
+    g_clearDown = true;
+}
+
+static LRESULT CALLBACK GameProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    if (message == WM_TIMER && wParam == CLEAR_TIMER)
+    {
+        ClearStep(hwnd);
+        return 0;
+    }
+
+    if (message == WM_LBUTTONDOWN)
+        Log("click %d,%d: over button %d (scale %.3f origin %d,%d)\n", (short)LOWORD(lParam), (short)HIWORD(lParam), (int)OverClearButton((short)LOWORD(lParam), (short)HIWORD(lParam)), g_viewScale, g_viewX, g_viewY);
+
+    if (message == WM_LBUTTONDOWN && g_clearEnabled && g_working && g_clearQueue.empty() && !g_clearDown &&
+        OverClearButton((short)LOWORD(lParam), (short)HIWORD(lParam)))
+    {
+        EnterCriticalSection(&g_lock);
+        SurfaceLock surface;
+        bool shown = SquadScreenShown(surface);
+        if (shown)
+            CollectTags(surface, g_clearQueue);
+        Log("clear: squad shown %d, %d tags\n", (int)shown, (int)g_clearQueue.size());
+        LeaveCriticalSection(&g_lock);
+        if (shown)
+        {
+            g_swallowUp = true;
+            if (!g_clearQueue.empty())
+                SetTimer(hwnd, CLEAR_TIMER, CLEAR_INTERVAL, NULL);
+            return 0;
+        }
+    }
+    if (message == WM_LBUTTONUP && g_swallowUp)
+    {
+        g_swallowUp = false;
+        return 0;
+    }
+    return CallWindowProcA(g_oldProc, hwnd, message, wParam, lParam);
+}
+
+static BOOL CALLBACK FindGameWindow(HWND hwnd, LPARAM result)
+{
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    RECT r;
+    if (pid == GetCurrentProcessId() && IsWindowVisible(hwnd) && GetWindow(hwnd, GW_OWNER) == NULL &&
+        GetClientRect(hwnd, &r) && r.right >= 400 && r.bottom >= 300)
+    {
+        *(HWND*)result = hwnd;
+        return FALSE;
+    }
+    return TRUE;
+}
+
+// Puts our window procedure in front of the game's (once), to see the clicks on the button
+static void EnsureSubclass()
+{
+    if (g_hwnd || !g_clearEnabled)
+        return;
+    HWND found = NULL;
+    EnumWindows(FindGameWindow, (LPARAM)&found);
+    if (!found)
+        return;
+    g_oldProc = (WNDPROC)SetWindowLongPtrA(found, GWLP_WNDPROC, (LONG_PTR)GameProc);
+    if (g_oldProc)
+        g_hwnd = found;
+}
+
 extern "C"
 {
 
@@ -1009,6 +1239,10 @@ void __cdecl Cm3_AfterStretch(HDC hdc, int dl, int dt, int dw, int dh, int scale
     EnterCriticalSection(&g_lock);
 
     double scale = scale16 / 65536.0;
+    g_viewScale = scale;
+    g_viewX = ox;
+    g_viewY = oy;
+    EnsureSubclass();
     int saved = SaveDC(hdc);
     IntersectClipRect(hdc, dl, dt, dl + dw, dt + dh);
     SetBkMode(hdc, TRANSPARENT);
@@ -1110,6 +1344,13 @@ void __cdecl Cm3_AfterStretch(HDC hdc, int dl, int dt, int dw, int dh, int scale
         drawn++;
     }
     Log("after stretch: dest=%d,%d,%d,%d items=%d drawn=%d\n", dl, dt, dw, dh, (int)g_items.size(), drawn);
+
+    if (g_clearEnabled && g_hwnd)
+    {
+        SurfaceLock surface;
+        if (SquadScreenShown(surface))
+            DrawClearButton(hdc, scale, ox, oy);
+    }
 
     RestoreDC(hdc, saved);
     LeaveCriticalSection(&g_lock);

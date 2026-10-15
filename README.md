@@ -1,18 +1,26 @@
-# Scottapotamus CM3 Patcher
+# CM3 Utils by Scottapotamus
 
-A standalone tool that lets Championship Manager 3 (v3.04e, `cm3.exe`) run at resolutions other than 800x600, with
+One app for Championship Manager 3 (v3.04e): the **Patcher** (this document), the saved game **Editing** and **Scouting**
+(see `SaveGameEditor\README.md`). Start it and pick one on the first screen or with the buttons in the red title bar.
+
+The Patcher is a tool that lets Championship Manager 3 (v3.04e, `cm3.exe`) run at resolutions other than 800x600, with
 smoother scaling, sharper fonts and an optional modern-text mode.
 It is independent of the CM0102 patcher in the parent folder.
 
 ## Usage
 
-1. Build `CM3ResolutionPatcher.csproj` (Release) in Visual Studio, then run `bin\Release\Scottapotamus CM3 Patcher.exe`
-   (it asks for administrator rights because CM3 is normally installed in Program Files).
-2. Select `cm3.exe` (the default install location is detected automatically).
-3. Pick a resolution, or type your own as `WIDTHxHEIGHT`, a scaling filter, and the font options, then click **Apply**.
-4. Choose **800x600** at any time to restore the original game.
-
-A copy of the untouched exe is saved as `cm3_original.exe` first (unless you untick the box).
+1. Build `CM3Utils.csproj` (Release) in Visual Studio, then run `bin\Release\CM3 Utils.exe` and choose **Patcher**.
+   CM3 is normally installed in Program Files, which needs administrator rights to write to: if the patcher can't write
+   there it offers to restart CM3 Utils as administrator (the rest of the app doesn't need them).
+2. Select `cm3.exe` (the default install location is detected automatically). The line under it says what is in the game now.
+3. The settings are on four tabs, each with its own **Apply** button that changes only the settings of that tab (everything
+   else stays as it is in the game):
+   - **Graphics**: the resolution (pick one or type `WIDTHxHEIGHT`), the scaling filter, font sharpening, and Modern text with
+     its font (the font list is shown in the fonts themselves, with a preview).
+   - **Interface**: the + / - and scroll button fix.
+   - **Game rules**: modern substitutes rules (new games).
+   - **Enhancements**: the attribute highlights and the squad Clear button (these need Modern text to be in the game already).
+   The scaling filter and font strength can't be read back from the exe, so they are remembered in `cm3utils.ini` next to it.
 
 ## How it works
 
@@ -73,6 +81,15 @@ debug=1
 (Comments must be on their own lines.)
 
 Needs one of the GDI+ scaling modes (it is switched on automatically). Not available at 800x600.
+
+### Squad screen: Clear button
+
+The game has no way to unselect the whole team: you have to click each position tag (SB1, GK, DMC...) of the squad screen one
+by one. With Modern text on, the overlay adds a **Clear** button next to Sort By on the squad screen. Clicking it clicks every
+position tag on the screen for you (synthetic mouse clicks sent to the game's own window, one every ~45 ms, so the game does
+the unselecting and redraws itself; it takes a couple of seconds). It is a patcher option ("Squad screen: a Clear button"), saved
+as `[squad] clearbutton=1` in `cm3text.ini`. It shows on any squad list (also other clubs', where it does nothing, because there
+are no tags). Needs a scaled resolution, like the rest of Modern text.
 
 ### Player attribute highlighting
 
@@ -167,7 +184,7 @@ repeats. It is independent of the resolution settings, so it works at 800x600 to
 
 ## Rebuilding
 
-* The patcher: build `CM3ResolutionPatcher.csproj` with Visual Studio / MSBuild (.NET Framework 3.5). It embeds
+* The patcher: build `CM3Utils.csproj` with Visual Studio / MSBuild (.NET Framework 3.5). It embeds
   `TextOverlay\cm3text.dll`.
 * `TextOverlay\cm3text.dll`: run `TextOverlay\build.bat` (needs the Visual Studio Build Tools with the C++ workload). The
   built DLL is checked in, so you only need this if you change `cm3text.cpp`.

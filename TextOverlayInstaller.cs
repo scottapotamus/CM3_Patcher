@@ -22,7 +22,7 @@ namespace CM3ResolutionPatcher
 
         // fontFace: the font for all text. highlightAttributes: colour player attributes by value and put a bar behind the
         // best ones (those at or above highlightFrom).
-        public static void Install(string gameFolder, string fontFace, bool highlightAttributes, int highlightFrom, bool byValue, bool border, Color keyColour, Color secondaryColour, Color otherColour, Color borderColour)
+        public static void Install(string gameFolder, string fontFace, bool highlightAttributes, int highlightFrom, bool byValue, bool border, Color keyColour, Color secondaryColour, Color otherColour, Color borderColour, bool clearButton)
         {
             string dllPath = Path.Combine(gameFolder, DllName);
 
@@ -60,6 +60,7 @@ namespace CM3ResolutionPatcher
             SetValue(iniPath, "attributes", "secondarycolour", ToHex(secondaryColour));
             SetValue(iniPath, "attributes", "othercolour", ToHex(otherColour));
             SetValue(iniPath, "attributes", "bordercolour", ToHex(borderColour));
+            SetValue(iniPath, "squad", "clearbutton", clearButton ? "1" : "0");
         }
 
         // Removes the DLL (the settings file is kept in case the overlay is switched back on later)
@@ -96,6 +97,13 @@ namespace CM3ResolutionPatcher
         {
             string value = GetValue(Path.Combine(gameFolder, IniName), "attributes", "mode");
             return value == null || value.Trim().ToLowerInvariant() != "position";
+        }
+
+        // The "Clear" button on the squad screen (on unless the settings file says otherwise)
+        public static bool ReadClearButton(string gameFolder)
+        {
+            string value = GetValue(Path.Combine(gameFolder, IniName), "squad", "clearbutton");
+            return value == null || value != "0";
         }
 
         public static bool ReadBorder(string gameFolder)
@@ -135,7 +143,7 @@ namespace CM3ResolutionPatcher
 
         // ---- a tiny ini reader/writer that keeps everything else in the file (other settings, comments) as it was ----
 
-        static string GetValue(string iniPath, string section, string key)
+        public static string GetValue(string iniPath, string section, string key)
         {
             if (!File.Exists(iniPath))
                 return null;
@@ -155,7 +163,7 @@ namespace CM3ResolutionPatcher
             return null;
         }
 
-        static void SetValue(string iniPath, string section, string key, string value)
+        public static void SetValue(string iniPath, string section, string key, string value)
         {
             List<string> lines = new List<string>();
             if (File.Exists(iniPath))
