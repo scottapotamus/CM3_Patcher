@@ -563,58 +563,53 @@ struct RoleDef
 
 // ---- the attribute lists, one KEY and one SEC list per kind of player ----
 // Edit these to change what gets highlighted. A name in KEY wins over the same name in SEC.
-#define DET ",Determination"
 
 // goalkeeper
-#define GK_KEY "Anticipation,Handling,Agility,Jumping,Positioning,Reflexes"
-#define GK_SEC "Acceleration,Pace,Strength" DET
+#define GK_KEY "Agility,Balance,Handling,Jumping,Positioning,Reflexes"
+#define GK_SEC "Acceleration,Anticipation,Bravery,Determination"
 
-// sweeper
-#define SW_KEY "Marking,Tackling,Heading,Positioning,Strength,Pace"
-#define SW_SEC "Jumping,Stamina,Passing,Acceleration" DET
+// centre back (sweepers too)
+#define CB_KEY "Tackling,Marking,Heading,Positioning,Strength,Determination,Bravery"
+#define CB_SEC "Acceleration,Aggression,Jumping,Pace,Stamina"
 
-// defender
-#define CB_KEY "Heading,Jumping,Pace,Positioning,Stamina,Strength,Marking,Tackling" DET
-#define CB_SEC "Acceleration,Agility,Passing"
-
-// defender (wide: full back)
-#define FB_KEY "Acceleration,Agility,Marking,Tackling,Stamina,Pace,Positioning"
-#define FB_SEC "Heading,Jumping,Dribbling,Strength,Crossing,Passing" DET
+// full back (defender, Right/Left)
+#define FB_KEY "Acceleration,Crossing,Tackling,Marking,Positioning,Pace,Stamina,Work Rate"
+#define FB_SEC "Anticipation,Balance,Bravery,Dribbling,Determination,Passing,Strength"
 
 // defensive midfielder
-#define DM_KEY "Marking,Passing,Tackling,Positioning,Strength,Teamwork,Work Rate" DET
-#define DM_SEC "Acceleration,Heading,Jumping,Pace,Stamina,Technique"
+#define DM_KEY "Aggression,Anticipation,Bravery,Determination,Marking,Passing,Positioning,Strength,Tackling,Teamwork"
+#define DM_SEC "Acceleration,Creativity,Stamina,Technique,Work Rate"
 
 // midfielder (centre)
-#define MC_KEY "Anticipation,Balance,Dribbling,Flair,Passing,Stamina,Technique"
-#define MC_SEC "Acceleration,Heading,Jumping,Pace,Strength,Teamwork" DET
+#define MC_KEY "Creativity,Determination,Passing,Stamina,Strength,Teamwork,Technique,Work Rate"
+#define MC_SEC "Acceleration,Aggression,Anticipation,Balance,Flair,Pace,Versatility"
 
-// attacking midfielder
-#define AM_KEY "Dribbling,Flair,Shooting,Off The Ball,Passing"
-#define AM_SEC DM_SEC
+// wide midfielder (midfielder and attacking midfielder, Right/Left)
+#define WM_KEY "Acceleration,Agility,Balance,Crossing,Determination,Dribbling,Flair,Pace,Passing,Stamina,Technique"
+#define WM_SEC "Creativity,Off The Ball,Set Pieces,Strength,Versatility,Work Rate"
 
-// winger (the wide version of several roles below)
-#define WG_KEY "Acceleration,Agility,Crossing,Dribbling,Pace,Flair" DET
-#define WG_SEC "Flair,Heading,Jumping,Stamina,Strength,Teamwork"
+// attacking midfielder (centre)
+#define AM_KEY "Balance,Creativity,Determination,Dribbling,Flair,Off The Ball,Passing,Shooting,Technique"
+#define AM_SEC "Acceleration,Anticipation,Pace,Set Pieces,Teamwork,Versatility"
 
-// striker
-#define ST_KEY "Shooting,Pace,Off The Ball,Acceleration,Bravery" DET
-#define ST_SEC "Crossing,Dribbling,Flair,Set Pieces,Heading,Jumping,Passing,Technique"
+// forward (strikers and every kind of forward)
+#define FW_KEY "Acceleration,Agility,Balance,Bravery,Determination,Off The Ball,Pace,Shooting,Technique"
+#define FW_SEC "Aggression,Dribbling,Heading,Passing,Set Pieces,Stamina,Strength,Work Rate"
 
 // ---- the roles ----
 // Columns: position word, then key and secondary lists when playing in the centre (or with no side shown), then key and
 // secondary lists when playing wide (Right/Left). Empty wide lists mean the centre lists are used on every side.
 static const RoleDef ROLES[] = {
-    //  position                 centre key  centre sec  wide key               wide sec
-    { "Goalkeeper",            GK_KEY,     GK_SEC,     "",                    "" },
-    { "Sweeper",               SW_KEY,     SW_SEC,     "",                    "" },
-    { "Defender",              CB_KEY,     CB_SEC,     FB_KEY,                FB_SEC },              // centre back / full back
-    { "Defensive Midfielder",  DM_KEY,     DM_SEC,     "",                    "" },
-    { "Midfielder",            MC_KEY,     MC_SEC,     MC_KEY "," WG_KEY,     MC_SEC "," WG_SEC },   // midfielder + winger
-    { "Attacking Midfielder",  AM_KEY,     AM_SEC,     "",                    "" },
-    { "Striker",               ST_KEY,     ST_SEC,     "",                    "" },
-    { "Forward",               ST_KEY,     ST_SEC,     WG_KEY "," ST_KEY,     WG_SEC "," ST_SEC },   // winger + striker
-    { "Attacker",              ST_KEY,     ST_SEC,     WG_KEY,                WG_SEC },              // winger
+    //  position                 centre key  centre sec  wide key     wide sec
+    { "Goalkeeper",            GK_KEY,     GK_SEC,     "",          "" },
+    { "Sweeper",               CB_KEY,     CB_SEC,     "",          "" },
+    { "Defender",              CB_KEY,     CB_SEC,     FB_KEY,      FB_SEC },     // centre back / full back
+    { "Defensive Midfielder",  DM_KEY,     DM_SEC,     "",          "" },
+    { "Midfielder",            MC_KEY,     MC_SEC,     WM_KEY,      WM_SEC },     // centre / wide midfielder
+    { "Attacking Midfielder",  AM_KEY,     AM_SEC,     WM_KEY,      WM_SEC },     // centre / wide midfielder
+    { "Striker",               FW_KEY,     FW_SEC,     "",          "" },
+    { "Forward",               FW_KEY,     FW_SEC,     "",          "" },
+    { "Attacker",              FW_KEY,     FW_SEC,     WM_KEY,      WM_SEC },     // wide attackers are wide midfielders
 };
 
 static unsigned MaskOf(const char* commaList)

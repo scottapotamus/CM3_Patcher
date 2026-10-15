@@ -70,6 +70,7 @@ namespace CM3SaveGameEditor
         NavItem navExit;
         NavItem navToggle;
         NavItem navSupport;
+        public const string Version = "2.11";
         const string SupportUrl = "https://buymeacoffee.com/scottevanso";
         bool sidebarCompact;
         PatcherPanel patcher;
@@ -96,7 +97,8 @@ namespace CM3SaveGameEditor
             MinimumSize = SizeFromClientSize(new Size(1060, 680));
             StartPosition = FormStartPosition.CenterScreen;
             BackColor = Theme.Background;
-            Icon = Theme.BallIcon();
+            try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); }      // the icon of the exe
+            catch { Icon = Theme.BallIcon(); }
             using (Graphics g = CreateGraphics())
                 dpiScale = g.DpiX / 96f;
 
@@ -237,6 +239,8 @@ namespace CM3SaveGameEditor
                 if (sidebarCompact)
                 {
                     Theme.DrawBall(g, new Rectangle((sidebar.Width - Theme.Px(g, 40)) / 2, Theme.Px(g, 24), Theme.Px(g, 40), Theme.Px(g, 40)));
+                    using (Font tiny = new Font("Segoe UI", 7.5f))
+                        TextRenderer.DrawText(g, "v" + Version, tiny, new Rectangle(0, Theme.Px(g, 68), sidebar.Width, Theme.Px(g, 16)), Color.FromArgb(190, 215, 242), TextFormatFlags.HorizontalCenter | TextFormatFlags.NoPadding);
                     return;
                 }
                 Theme.DrawBall(g, new Rectangle(Theme.Px(g, 24), Theme.Px(g, 24), Theme.Px(g, 48), Theme.Px(g, 48)));
@@ -244,6 +248,8 @@ namespace CM3SaveGameEditor
                     TextRenderer.DrawText(g, "CM3 Utils", title, new Point(Theme.Px(g, 82), Theme.Px(g, 22)), Color.White, TextFormatFlags.NoPadding);
                 using (Font small = new Font("Segoe UI", 8.5f, FontStyle.Bold))
                     TextRenderer.DrawText(g, "by Scottapotamus", small, new Point(Theme.Px(g, 84), Theme.Px(g, 56)), Theme.Gold, TextFormatFlags.NoPadding);
+                using (Font tiny = new Font("Segoe UI", 8f))
+                    TextRenderer.DrawText(g, "Version " + Version, tiny, new Point(Theme.Px(g, 24), Theme.Px(g, 76)), Color.FromArgb(190, 215, 242), TextFormatFlags.NoPadding);
                 using (Font caption = new Font("Segoe UI", 8f, FontStyle.Bold))
                     TextRenderer.DrawText(g, "MENU", caption, new Point(Theme.Px(g, 28), Theme.Px(g, 108)), Color.FromArgb(170, 205, 240), TextFormatFlags.NoPadding);
             };

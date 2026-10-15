@@ -1,5 +1,7 @@
 # CM3 Utils by Scottapotamus
 
+Version 2.11
+
 One app for Championship Manager 3 (v3.04e): the **Patcher** (this document), the saved game **Editing** and **Scouting**
 (see `SaveGameEditor\README.md`). Start it and pick one on the first screen or from the menu down the left side.
 
@@ -114,19 +116,16 @@ colour configurable). If the position isn't recognised, only the player's best a
 `cm3text.cpp`, `ROLES` (names are the game's own: "Off The Ball" is movement, "Shooting" covers finishing and long shots,
 "Set Pieces" is free kicks):
 
-| Role | Key | Secondary (plus Determination) |
+| Role | Key | Secondary |
 | --- | --- | --- |
-| Goalkeeper | Anticipation, Handling | Acceleration, Agility, Jumping, Pace, Passing, Positioning, Reflexes, Strength |
-| Sweeper | Marking, Passing, Tackling | Heading, Jumping, Pace, Positioning, Stamina, Strength |
-| Defender (centre) | Marking, Tackling | Heading, Jumping, Pace, Positioning, Stamina, Strength |
-| Defender (Right/Left) | Acceleration, Agility, Dribbling, Marking, Passing | Heading, Jumping, Pace, Positioning, Stamina, Strength |
-| Defensive Midfielder | Marking, Passing, Tackling | Acceleration, Heading, Jumping, Pace, Stamina, Strength, Teamwork |
-| Midfielder (centre) | Anticipation, Balance, Dribbling, Flair, Passing, Stamina, Technique | Acceleration, Heading, Jumping, Pace, Strength, Teamwork |
-| Midfielder (Right/Left) | Midfielder and Winger combined | Midfielder and Winger combined |
-| Attacking Midfielder (any side) | Dribbling, Flair, Shooting, Off The Ball, Passing | Acceleration, Heading, Jumping, Pace, Stamina, Strength, Teamwork |
-| Attacker (Right/Left) | Acceleration, Agility, Crossing, Dribbling, Pace | Flair, Heading, Jumping, Stamina, Strength, Teamwork |
-| Forward (Right/Left) | Winger and Striker combined | Winger and Striker combined |
-| Striker (and Forward/Attacker in the centre) | Shooting, Pace | Crossing, Dribbling, Flair, Set Pieces, Heading, Jumping, Off The Ball, Passing |
+| Goalkeeper | Agility, Balance, Handling, Jumping, Positioning, Reflexes | Acceleration, Anticipation, Bravery, Determination |
+| Centre back (and sweeper) | Tackling, Marking, Heading, Positioning, Strength, Determination, Bravery | Acceleration, Aggression, Jumping, Pace, Stamina |
+| Full back (Defender, Right/Left) | Acceleration, Crossing, Tackling, Marking, Positioning, Pace, Stamina, Work Rate | Anticipation, Balance, Bravery, Dribbling, Determination, Passing, Strength |
+| Defensive Midfielder | Aggression, Anticipation, Bravery, Determination, Marking, Passing, Positioning, Strength, Tackling, Teamwork | Acceleration, Creativity, Stamina, Technique, Work Rate |
+| Midfielder (centre) | Creativity, Determination, Passing, Stamina, Strength, Teamwork, Technique, Work Rate | Acceleration, Aggression, Anticipation, Balance, Flair, Pace, Versatility |
+| Wide Midfielder (Midfielder or Attacking Midfielder, Right/Left, and Attacker Right/Left) | Acceleration, Agility, Balance, Crossing, Determination, Dribbling, Flair, Pace, Passing, Stamina, Technique | Creativity, Off The Ball, Set Pieces, Strength, Versatility, Work Rate |
+| Attacking Midfielder (centre) | Balance, Creativity, Determination, Dribbling, Flair, Off The Ball, Passing, Shooting, Technique | Acceleration, Anticipation, Pace, Set Pieces, Teamwork, Versatility |
+| Forward (Striker, Forward, and Attacker in the centre) | Acceleration, Agility, Balance, Bravery, Determination, Off The Ball, Pace, Shooting, Technique | Aggression, Dribbling, Heading, Passing, Set Pieces, Stamina, Strength, Work Rate |
 
 A player with several roles or sides (e.g. "Defender/Midfielder (Right/Centre)") gets the union. If the label isn't
 recognised the bars simply go on his best attributes. It matches English text only. Settings (the patcher writes them
