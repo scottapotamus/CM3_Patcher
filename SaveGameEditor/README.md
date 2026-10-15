@@ -14,6 +14,9 @@ capacity and seated capacity, then press Set; the changed clubs are shown in yel
 stadium that several clubs use (some lower league clubs share one) is changed for all of them; 1,062 clubs have no stadium.
 Balances can be anything from -2,000,000,000 to 2,000,000,000 (the game's amounts are mostly 32 bit).
 
+A warning: renaming a club may break your saved game. The editor tells you this on the tab and asks you to confirm when you
+press Apply with a renamed club. Keep a backup (the editor makes a .bak copy when you overwrite).
+
 - `club.dat` has 581 byte records: +0 id, +4 name (52 bytes, up to 50 characters are used), +56 short name (24 bytes), +105
   the id of the club's stadium (-1 = none) and +128 the club's reputation (signed 16 bit; 0-10,000, the biggest clubs are over
   9,000). The reputation is used by the function at 0x5009D0 in cm3.exe, which works out the Transfer Funds.
@@ -68,6 +71,9 @@ nation or "Free agents only", then add as many ranges as you like - "Potential a
 14 and 19", "Professionalism between 15 and 20" - each one adds a column to the results. A second range on the same number
 replaces the first. Click a column heading to sort (all matches are sorted, the first 1000 are listed). Select a player to see
 every number about him.
+
+The column headings are short (Det, Tac, Wor...), so hover over one to see its full name. The bar between the search options
+and the table can be dragged to give either side more room.
 
 Searchable numbers: current and potential ability (0-200, hidden by the game), age (from the game's date), wages per month,
 the 31 attributes the game shows, the hidden ones (ambition, loyalty, pressure, professionalism, sportsmanship, temperament)
@@ -147,7 +153,7 @@ The "Competitions" tab lists the leagues and cups (clubs' and national teams') a
 are in `club_comp.dat` and `nation_comp.dat` (107 byte records: +0 id, +4 name (52 bytes), +56 short name (24 bytes), +93 the
 nation); each competition's data is in a sub-file called `<name>_<id>.tmp`, which is renamed too (the game builds that name
 when it opens the file). The prize money of a competition is not stored in the save (no prize table in any sub-file or in
-cm3.exe's data), so it can't be edited. Names change in the saved game only.
+cm3.exe's data), so it can't be edited. Names change in the saved game only. As with clubs, renaming can break the save, so Apply asks you to confirm first.
 
 ## People: adding and removing players and staff
 

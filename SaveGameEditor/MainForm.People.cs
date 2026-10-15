@@ -66,7 +66,7 @@ namespace CM3SaveGameEditor
             page.Controls.Add(left);
             right.BringToFront();
 
-            GroupBox who = new GroupBox { Text = "A new person", Left = 10, Top = 8, Width = 450, Height = 300 };
+            GroupBox who = new CardBox { Text = "A new person", Left = 10, Top = 8, Width = 450, Height = 300 };
             left.Controls.Add(who);
 
             radioPlayer = new RadioButton { Text = "Player", Left = 12, Top = 22, AutoSize = true, Checked = true };
@@ -120,10 +120,10 @@ namespace CM3SaveGameEditor
             who.Controls.Add(new Label { Text = "Set every attribute to:", Left = 12, Top = 256, AutoSize = true });
             numericAllAttributes = new NumericUpDown { Left = 140, Top = 252, Width = 56, Minimum = 1, Maximum = 20, Value = 10 };
             who.Controls.Add(numericAllAttributes);
-            Button setAll = new Button { Text = "Set", Left = 204, Top = 250, Width = 60 };
+            Button setAll = new ModernButton { Text = "Set", Left = 204, Top = 250, Width = 60 };
             setAll.Click += delegate { (radioPlayer.Checked ? newPlayerEditor : newStaffEditor).SetAllAttributes((int)numericAllAttributes.Value); };
             who.Controls.Add(setAll);
-            buttonAddPerson = new Button { Text = "Add to the list", Left = 300, Top = 250, Width = 130 };
+            buttonAddPerson = new ModernButton { Text = "Add to the list", Left = 300, Top = 250, Width = 130 };
             buttonAddPerson.Click += delegate { AddPersonToList(); };
             who.Controls.Add(buttonAddPerson);
 
@@ -140,7 +140,7 @@ namespace CM3SaveGameEditor
             listNewPeople.Columns.Add("Born", 70);
             listNewPeople.SelectedIndexChanged += delegate { buttonUndoAdd.Enabled = listNewPeople.SelectedItems.Count > 0; };
             left.Controls.Add(listNewPeople);
-            buttonUndoAdd = new Button { Text = "Take off the list", Left = 10, Top = 438, Width = 130, Enabled = false };
+            buttonUndoAdd = new ModernButton { Text = "Take off the list", Left = 10, Top = 438, Width = 130, Enabled = false };
             buttonUndoAdd.Click += delegate { UndoAddPerson(); };
             left.Controls.Add(buttonUndoAdd);
             left.Resize += delegate
@@ -150,7 +150,7 @@ namespace CM3SaveGameEditor
             };
 
             // a red title like the Attributes tab's, the numbers under it
-            Panel header = new Panel { Dock = DockStyle.Top, Height = 64, BackColor = Theme.Red };
+            Panel header = new Panel { Dock = DockStyle.Top, Height = 64, BackColor = Theme.Blue };
             labelNewTitle = new Label { Left = 14, Top = 6, Height = 30, AutoSize = true, ForeColor = Color.White, Font = new Font("Arial", 16f, FontStyle.Bold), Text = "A new player" };
             labelNewSub = new Label { Left = 16, Top = 40, AutoSize = true, ForeColor = Theme.Yellow, Font = Theme.Bold, Text = "Set the numbers, then press \"Add to the list\"" };
             header.Controls.Add(labelNewTitle);

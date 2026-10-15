@@ -42,7 +42,7 @@ namespace CM3SaveGameEditor
             listCompetitions.SelectedIndexChanged += delegate { ShowSelectedCompetition(); };
             page.Controls.Add(listCompetitions);
 
-            GroupBox group = new GroupBox { Text = "The selected competition", Left = 10, Top = 248, Width = 700, Height = 100 };
+            GroupBox group = new CardBox { Text = "The selected competition  -  warning: renaming may break your saved game", Left = 10, Top = 248, Width = 700, Height = 100 };
             page.Controls.Add(group);
             group.Controls.Add(new Label { Text = "Name:", Left = 10, Top = 28, AutoSize = true });
             textBoxCompetitionName = new TextBox { Left = 100, Top = 24, Width = 330, MaxLength = SaveGameFile.MaxCompetitionName, Enabled = false };
@@ -50,10 +50,10 @@ namespace CM3SaveGameEditor
             group.Controls.Add(new Label { Text = "Short name:", Left = 10, Top = 62, AutoSize = true });
             textBoxCompetitionShort = new TextBox { Left = 100, Top = 58, Width = 190, MaxLength = SaveGameFile.MaxCompetitionShortName, Enabled = false };
             group.Controls.Add(textBoxCompetitionShort);
-            buttonSetCompetition = new Button { Text = "Set", Left = 450, Top = 22, Width = 80, Enabled = false };
+            buttonSetCompetition = new ModernButton { Text = "Set", Left = 450, Top = 22, Width = 80, Enabled = false };
             buttonSetCompetition.Click += delegate { SetSelectedCompetition(); };
             group.Controls.Add(buttonSetCompetition);
-            buttonUndoCompetition = new Button { Text = "Undo", Left = 540, Top = 22, Width = 80, Enabled = false };
+            buttonUndoCompetition = new ModernButton { Text = "Undo", Left = 540, Top = 22, Width = 80, Enabled = false };
             buttonUndoCompetition.Click += delegate { UndoSelectedCompetition(); };
             group.Controls.Add(buttonUndoCompetition);
 
@@ -67,7 +67,7 @@ namespace CM3SaveGameEditor
 
             labelCompetitionEdits = new Label { Left = 10, Top = 452, Width = 380, Height = 18, Text = "" };
             page.Controls.Add(labelCompetitionEdits);
-            buttonClearCompetitions = new Button { Text = "Clear all", Left = 636, Top = 446, Width = 74, Enabled = false };
+            buttonClearCompetitions = new ModernButton { Text = "Clear all", Left = 636, Top = 446, Width = 74, Enabled = false };
             buttonClearCompetitions.Click += delegate { competitionEdits.Clear(); FillCompetitions(); ShowSelectedCompetition(); UpdateCompetitionEdits(); };
             page.Controls.Add(buttonClearCompetitions);
 

@@ -44,6 +44,10 @@ namespace CM3SaveGameEditor
         List<ScoutPlayer> everybody = new List<ScoutPlayer>();
         List<Criterion> criteria = new List<Criterion>();
         List<int> columnKinds = new List<int>();
+        List<string> columnTips = new List<string>();
+        ToolTip tip;
+        Timer tipTimer;
+        int tipColumn = -2;
         List<int> comboFields = new List<int>();    // the field of each item of the combo box
         int sortKind = ScoutFieldSet.CurrentAbility;        // what the table is sorted on (a field, or a text column)
         bool sortDescending = true;
@@ -85,7 +89,9 @@ namespace CM3SaveGameEditor
             // the search options on the left, the table on the right
             Panel left = new Panel { Dock = DockStyle.Left, Width = 490 };
             Panel right = new Panel { Dock = DockStyle.Fill, Padding = new Padding(0, 10, 10, 10) };
+            Splitter splitter = new Splitter { Dock = DockStyle.Left, Width = 8, MinSize = 380, MinExtra = 260, BackColor = Color.White, Cursor = Cursors.VSplit };
             Controls.Add(right);
+            Controls.Add(splitter);
             Controls.Add(left);
             right.BringToFront();
 
@@ -128,7 +134,7 @@ namespace CM3SaveGameEditor
             checkBoxFreeAgents.CheckedChanged += delegate { Search(); };
             left.Controls.Add(checkBoxFreeAgents);
 
-            GroupBox group = new GroupBox { Text = "Only " + noun + " whose... are between", Left = 10, Top = 96, Width = 470, Height = 146 };
+            GroupBox group = new CardBox { Text = "Only " + noun + " whose... are between", Left = 10, Top = 96, Width = 470, Height = 146 };
             left.Controls.Add(group);
 
             comboField = new ComboBox { Left = 10, Top = 20, Width = 190, DropDownStyle = ComboBoxStyle.DropDownList, MaxDropDownItems = 24 };
@@ -140,7 +146,7 @@ namespace CM3SaveGameEditor
             group.Controls.Add(numericMin);
             group.Controls.Add(new Label { Text = "and", Left = 288, Top = 24, AutoSize = true });
             group.Controls.Add(numericMax);
-            Button add = new Button { Text = "Add", Left = 398, Top = 18, Width = 62 };
+            Button add = new ModernButton { Text = "Add", Left = 398, Top = 18, Width = 62 };
             add.Click += delegate { AddCriterion(); };
             group.Controls.Add(add);
 
@@ -150,15 +156,17 @@ namespace CM3SaveGameEditor
                 View = View.Details, FullRowSelect = true, HideSelection = false, MultiSelect = false, GridLines = true
             };
             listCriteria.Columns.Add("Must be", 160);
-            listCriteria.Columns.Add("From", 90, HorizontalAlignment.Right);
-            listCriteria.Columns.Add("To", 90, HorizontalAlignment.Right);
+            listCriteria.Columns.Add("From", 70, HorizontalAlignment.Right);
+            listCriteria.Columns.Add("To", 70, HorizontalAlignment.Right);
+            // the number columns are only as wide as they need to be: "Must be" takes the rest
+            listCriteria.Resize += delegate { listCriteria.Columns[0].Width = Math.Max(120, listCriteria.ClientSize.Width - 140); };
             listCriteria.SelectedIndexChanged += delegate { buttonRemove.Enabled = listCriteria.SelectedItems.Count > 0; };
             group.Controls.Add(listCriteria);
 
-            buttonRemove = new Button { Text = "Remove", Left = 378, Top = 50, Width = 82, Enabled = false };
+            buttonRemove = new ModernButton { Text = "Remove", Left = 378, Top = 50, Width = 82, Enabled = false };
             buttonRemove.Click += delegate { RemoveCriterion(); };
             group.Controls.Add(buttonRemove);
-            buttonClear = new Button { Text = "Clear all", Left = 378, Top = 80, Width = 82, Enabled = false };
+            buttonClear = new ModernButton { Text = "Clear all", Left = 378, Top = 80, Width = 82, Enabled = false };
             buttonClear.Click += delegate { criteria.Clear(); CriteriaChanged(); };
             group.Controls.Add(buttonClear);
 
@@ -168,6 +176,11 @@ namespace CM3SaveGameEditor
             // the criteria list takes the height that is left
             left.Resize += delegate
             {
+                group.Width = Math.Max(300, left.ClientSize.Width - 20);
+                listCriteria.Width = group.Width - 110;
+                buttonRemove.Left = buttonClear.Left = group.Width - 92;
+                add.Left = group.Width - 72;
+                labelCount.Width = group.Width;
                 group.Height = Math.Max(146, left.ClientSize.Height - group.Top - 48);
                 listCriteria.Height = group.Height - 60;
                 labelCount.Top = group.Bottom + 6;
@@ -178,6 +191,11 @@ namespace CM3SaveGameEditor
                 Dock = DockStyle.Fill,
                 View = View.Details, FullRowSelect = true, HideSelection = false, MultiSelect = false, GridLines = true
             };
+            tip = new ToolTip { InitialDelay = 200, ReshowDelay = 100, AutoPopDelay = 8000 };
+            tipTimer = new Timer { Interval = 150 };
+            tipTimer.Tick += delegate { UpdateColumnTip(); };
+            tipTimer.Start();
+            Disposed += delegate { tipTimer.Dispose(); tip.Dispose(); };
             listResults.ColumnClick += delegate(object sender, ColumnClickEventArgs e) { SortBy(e.Column); };
             right.Controls.Add(listResults);
 
@@ -306,26 +324,71 @@ namespace CM3SaveGameEditor
         void BuildColumns()
         {
             columnKinds.Clear();
+            columnTips.Clear();
             listResults.Columns.Clear();
-            AddColumn("Name", KindName, 150, HorizontalAlignment.Left);
-            AddColumn("Club", KindClub, 140, HorizontalAlignment.Left);
-            AddColumn(extraTitle, KindExtra, 100, HorizontalAlignment.Left);
-            AddColumn("Age", ScoutFieldSet.Age, 40, HorizontalAlignment.Right);
+            AddColumn("Name", KindName, 150, HorizontalAlignment.Left, "Name");
+            AddColumn("Club", KindClub, 140, HorizontalAlignment.Left, "Club");
+            AddColumn(extraTitle, KindExtra, 100, HorizontalAlignment.Left, extraTitle);
+            AddColumn("Age", ScoutFieldSet.Age, 48, HorizontalAlignment.Right, "Age");
             if (showHidden)
             {
-                AddColumn("CA", ScoutFieldSet.CurrentAbility, 40, HorizontalAlignment.Right);
-                AddColumn("PA", ScoutFieldSet.PotentialAbility, 40, HorizontalAlignment.Right);
+                AddColumn("CA", ScoutFieldSet.CurrentAbility, 48, HorizontalAlignment.Right, "Current Ability (hidden)");
+                AddColumn("PA", ScoutFieldSet.PotentialAbility, 48, HorizontalAlignment.Right, "Potential Ability (hidden)");
             }
-            AddColumn("Wages", ScoutFieldSet.Wage, 70, HorizontalAlignment.Right);
+            AddColumn("Wages", ScoutFieldSet.Wage, 70, HorizontalAlignment.Right, "Wages per month");
             for (int i = set.FirstVisible; i < set.All.Length; i++)
                 if (Shown(i))
-                    AddColumn(ShortName(set.All[i]), i, 40, HorizontalAlignment.Right);
+                    AddColumn(ShortName(set.All[i]), i, 48, HorizontalAlignment.Right, set.All[i].Hidden ? set.All[i].Name + " (hidden)" : set.All[i].Name);
         }
 
-        void AddColumn(string title, int kind, int width, HorizontalAlignment align)
+        void AddColumn(string title, int kind, int width, HorizontalAlignment align, string tipText)
         {
             listResults.Columns.Add(title, width, align);
             columnKinds.Add(kind);
+            columnTips.Add(tipText);
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+        [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        struct RECT { public int Left, Top, Right, Bottom; }
+
+        // The column names are short: show the full name when the mouse rests on a heading
+        void UpdateColumnTip()
+        {
+            if (!listResults.IsHandleCreated || !listResults.Visible || !listResults.FindForm().Visible)
+                return;
+            IntPtr header = SendMessage(listResults.Handle, 0x101F, IntPtr.Zero, IntPtr.Zero);   // LVM_GETHEADER
+            RECT r;
+            if (header == IntPtr.Zero || !GetWindowRect(header, out r))
+                return;
+            Point cursor = Cursor.Position;
+            if (!new Rectangle(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top).Contains(cursor))
+            {
+                if (tipColumn != -2)
+                {
+                    tip.Hide(listResults);
+                    tipColumn = -2;
+                }
+                return;
+            }
+            int x = cursor.X - r.Left;        // the header scrolls with the table
+            int column = -1, left = 0;
+            for (int i = 0; i < listResults.Columns.Count; i++)
+            {
+                left += listResults.Columns[i].Width;
+                if (x < left) { column = i; break; }
+            }
+            if (column == tipColumn)
+                return;
+            tipColumn = column;
+            if (column >= 0 && column < columnTips.Count)
+            {
+                Point at = listResults.PointToClient(new Point(cursor.X, r.Bottom));
+                tip.Show(columnTips[column], listResults, at.X + 8, at.Y + 4, 8000);
+            }
+            else
+                tip.Hide(listResults);
         }
 
         void SortBy(int column)

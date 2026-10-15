@@ -118,7 +118,7 @@ namespace CM3SaveGameEditor
             labelContractCount = new Label { Left = 10, Top = 170, Width = 468, Height = 16, Text = "" };
             page.Controls.Add(labelContractCount);
 
-            GroupBox group = new GroupBox { Text = "The selected contract", Left = 10, Top = 188, Width = 468, Height = 262 };
+            GroupBox group = new CardBox { Text = "The selected contract", Left = 10, Top = 188, Width = 468, Height = 262 };
             page.Controls.Add(group);
 
             group.Controls.Add(new Label { Text = "Type:", Left = 10, Top = 24, AutoSize = true });
@@ -164,7 +164,7 @@ namespace CM3SaveGameEditor
             group.Controls.Add(new Label { Text = "Release fee (shared by the clauses):", Left = 10, Top = 232, AutoSize = true });
             numericFee = new NumericUpDown { Left = 200, Top = 228, Width = 110, Minimum = 0, Maximum = 2000000000, ThousandsSeparator = true, Increment = 10000, Enabled = false };
             group.Controls.Add(numericFee);
-            buttonSetContract = new Button { Text = "Set", Left = 330, Top = 226, Width = 60, Enabled = false };
+            buttonSetContract = new ModernButton { Text = "Set", Left = 330, Top = 226, Width = 60, Enabled = false };
             buttonSetContract.Click += delegate { SetSelectedContract(); };
             group.Controls.Add(buttonSetContract);
 
@@ -183,7 +183,7 @@ namespace CM3SaveGameEditor
 
             labelContractEdits = new Label { Left = 10, Top = 490, Width = 380, Height = 18, Text = "" };
             page.Controls.Add(labelContractEdits);
-            buttonClearContracts = new Button { Text = "Clear all", Left = 404, Top = 486, Width = 74, Enabled = false };
+            buttonClearContracts = new ModernButton { Text = "Clear all", Left = 404, Top = 486, Width = 74, Enabled = false };
             buttonClearContracts.Click += delegate { contractEdits.Clear(); this.changed(); };
             page.Controls.Add(buttonClearContracts);
             if (staff)

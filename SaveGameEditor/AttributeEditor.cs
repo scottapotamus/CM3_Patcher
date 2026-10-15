@@ -193,14 +193,14 @@ namespace CM3SaveGameEditor
             left.Resize += delegate { listPeople.Height = Math.Max(100, left.ClientSize.Height - listPeople.Top - 8); };
 
             // a red title like the game's, the numbers under it
-            Panel header = new Panel { Dock = DockStyle.Top, Height = 64, BackColor = Theme.Red };
+            Panel header = new Panel { Dock = DockStyle.Top, Height = 64, BackColor = Theme.Blue };
             labelHeader = new Label
             {
                 Left = 14, Top = 6, Height = 30, AutoSize = true, ForeColor = Color.White, Font = new Font("Arial", 16f, FontStyle.Bold),
                 Text = "Select " + (staff ? "a member of staff" : "a player") + " on the left"
             };
             labelSub = new Label { Left = 16, Top = 40, AutoSize = true, ForeColor = Theme.Yellow, Font = Theme.Bold, Text = "" };
-            buttonReset = new Button { Text = "Undo changes", Width = 120, Height = 28, Top = 18, Enabled = false };
+            buttonReset = new ModernButton { Text = "Undo changes", Width = 120, Height = 28, Top = 18, Enabled = false };
             buttonReset.Click += delegate { Reset(); };
             header.Controls.Add(labelHeader);
             header.Controls.Add(labelSub);

@@ -72,10 +72,10 @@ namespace CM3SaveGameEditor
             comboSecond = NewCombo(140, 86);
             right.Controls.Add(comboSecond);
 
-            buttonSet = new Button { Text = "Set", Left = 16, Top = 124, Width = 90, Enabled = false };
+            buttonSet = new ModernButton { Text = "Set", Left = 16, Top = 124, Width = 90, Enabled = false };
             buttonSet.Click += delegate { SetCurrent(); };
             right.Controls.Add(buttonSet);
-            buttonUndo = new Button { Text = "Undo changes", Left = 116, Top = 124, Width = 110, Enabled = false };
+            buttonUndo = new ModernButton { Text = "Undo changes", Left = 116, Top = 124, Width = 110, Enabled = false };
             buttonUndo.Click += delegate { Undo(); };
             right.Controls.Add(buttonUndo);
 

@@ -11,16 +11,6 @@ using System.IO;
 namespace CM3ResolutionPatcher
 {
     // Lets Championship Manager 3 (cm3.exe, v3.04e) run at resolutions other than 800x600.
-    //
-    // CM3 renders into a fixed 800x600 system-memory DirectDraw surface and every screen is laid out
-    // for that size, so unlike CM0102 there are no layout constants to tweak. Instead the game keeps
-    // drawing at 800x600 and this patch:
-    //   * makes the window / display mode the requested size,
-    //   * stretch-blits (aspect preserving, centred) the 800x600 surface onto the larger primary surface, and
-    //   * maps the mouse position back into 800x600 coordinates.
-    //
-    // The new code lives in a small executable section (.cm3res) appended to the exe, and the original
-    // code is redirected to it with 5 byte jumps ("hooks"). Choosing 800x600 puts the original bytes back.
     public class CM3ResolutionChanger
     {
         const int ImageBase = 0x400000;
@@ -143,7 +133,8 @@ namespace CM3ResolutionPatcher
         const int ToggleOffset = 0x132E6F;
         static readonly byte[] ToggleOriginal = FromHex("8BAC24C00000008B9C24BC000000");
 
-        // Optional: the substitutes rules. Every competition's rules word (bits 0-3 = substitutes named, bits 4-7 = substitutes
+        // Substitutes rules. 
+        // Every competition's rules word (bits 0-3 = substitutes named, bits 4-7 = substitutes
         // that may be used) is packed by three blocks of code that read the two per-competition bytes [obj+0x33] / [obj+0x34].
         // Replacing those six 3-byte reads (mov r8,[obj+disp]) with "mov r8,imm8 / nop" gives every competition the same rules.
         // The game's team selection and match engine hold 20 players per team (11 + 9), so 9 is the most that can be named.

@@ -11,16 +11,6 @@ using System.IO;
 namespace CM3ResolutionPatcher
 {
     // Lets Championship Manager 3 (cm3.exe, v3.04e) run at resolutions other than 800x600.
-    //
-    // CM3 renders into a fixed 800x600 system-memory DirectDraw surface and every screen is laid out
-    // for that size, so unlike CM0102 there are no layout constants to tweak. Instead the game keeps
-    // drawing at 800x600 and this patch:
-    //   * makes the window / display mode the requested size,
-    //   * stretch-blits (aspect preserving, centred) the 800x600 surface onto the larger primary surface, and
-    //   * maps the mouse position back into 800x600 coordinates.
-    //
-    // The new code lives in a small executable section (.cm3res) appended to the exe, and the original
-    // code is redirected to it with 5 byte jumps ("hooks"). Choosing 800x600 puts the original bytes back.
     public class CM3ResolutionChanger
     {
         const int ImageBase = 0x400000;

@@ -43,24 +43,43 @@ namespace CM3SaveGameEditor
         List<SaveGameFile.Contract> contracts = new List<SaveGameFile.Contract>();
         Dictionary<int, SaveGameFile.ContractEdit> contractEdits = new Dictionary<int, SaveGameFile.ContractEdit>();   // contract record -> new clauses
 
-        static readonly Color StatusColor = Color.FromArgb(205, 210, 235);
+        static readonly Color StatusColor = Theme.Muted;
 
-        Panel header;
-        Panel fileBar;
-        Panel footer;
+        [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        static extern IntPtr SendMessage(IntPtr handle, int message, IntPtr wParam, string lParam);
+
+        GradientPanel sidebar;
+        GradientPanel mainArea;
+        Panel topBar;
+        RoundPanel searchBox;
+        RoundPanel footer;
+        RoundPanel contentCard;
         Panel body;
         Panel welcome;
         Panel tiles;
         Label labelWelcome;
+        Label labelSub;
         Label labelHint;
-        Button buttonPatcher;
+        Tile tilePatcher;
+        Tile tileEditing;
+        Tile tileScouting;
+        NavItem navHome;
+        NavItem navPatcher;
+        NavItem navEditing;
+        NavItem navScouting;
+        NavItem navExit;
+        NavItem navToggle;
+        NavItem navSupport;
+        const string SupportUrl = "https://buymeacoffee.com/scottevanso";
+        bool sidebarCompact;
         PatcherPanel patcher;
-        Button buttonEditing;
-        Button buttonScouting;
-        Button buttonExit;
         TabControl scoutTabs;
 
         const int ModeHome = 0, ModePatcher = 1, ModeEditing = 2, ModeScouting = 3;
+
+        // the display's scale (1 at 96 dpi): sizes that are set while the app runs (the others scale with the form)
+        float dpiScale = 1f;
+        int Scaled(int value) { return (int)Math.Round(value * dpiScale); }
 
         public MainForm() : this(ModeHome)
         {
@@ -73,67 +92,57 @@ namespace CM3SaveGameEditor
             Font = Theme.Normal;
             AutoScaleDimensions = new SizeF(96F, 96F);
             AutoScaleMode = AutoScaleMode.Dpi;
-            ClientSize = new Size(1240, 780);
-            MinimumSize = SizeFromClientSize(new Size(1000, 640));
+            ClientSize = new Size(1280, 800);
+            MinimumSize = SizeFromClientSize(new Size(1060, 680));
             StartPosition = FormStartPosition.CenterScreen;
-            BackColor = Theme.DarkNavy;
+            BackColor = Theme.Background;
+            Icon = Theme.BallIcon();
+            using (Graphics g = CreateGraphics())
+                dpiScale = g.DpiX / 96f;
 
-            // the title bar, with the two parts of the editor
-            header = new Panel { Dock = DockStyle.Top, Height = 58, BackColor = Theme.Red };
-            Label title = new Label
+            BuildSidebar();
+
+            mainArea = new GradientPanel
             {
-                Text = "CM3 Utils", ForeColor = Color.White, Font = new Font("Arial", 18f, FontStyle.Bold),
-                Left = 16, Top = 10, AutoSize = true, Cursor = Cursors.Hand
-            };
-            title.Click += delegate { ShowMode(ModeHome); };
-            header.Controls.Add(title);
-            header.Controls.Add(new Label
-            {
-                Text = "by Scottapotamus", ForeColor = Theme.Yellow, Font = new Font("Arial", 9f, FontStyle.Bold),
-                Left = 148, Top = 24, AutoSize = true, Cursor = Cursors.Hand
-            });
-            buttonPatcher = new Button { Text = "PATCHER", Width = 130, Height = 36, Top = 11, Font = new Font("Arial", 9.5f, FontStyle.Bold) };
-            buttonEditing = new Button { Text = "EDITING", Width = 130, Height = 36, Top = 11, Font = new Font("Arial", 9.5f, FontStyle.Bold) };
-            buttonScouting = new Button { Text = "SCOUTING", Width = 130, Height = 36, Top = 11, Font = new Font("Arial", 9.5f, FontStyle.Bold) };
-            buttonExit = new Button { Text = "EXIT", Width = 80, Height = 36, Top = 11, Font = new Font("Arial", 9.5f, FontStyle.Bold) };
-            buttonPatcher.Click += delegate { ChooseMode(ModePatcher); };
-            buttonEditing.Click += delegate { ChooseMode(ModeEditing); };
-            buttonScouting.Click += delegate { ChooseMode(ModeScouting); };
-            buttonExit.Click += delegate { ExitApplication(); };
-            header.Controls.Add(buttonPatcher);
-            header.Controls.Add(buttonEditing);
-            header.Controls.Add(buttonScouting);
-            header.Controls.Add(buttonExit);
-            header.Resize += delegate
-            {
-                buttonExit.Left = header.ClientSize.Width - buttonExit.Width - 16;
-                buttonScouting.Left = buttonExit.Left - buttonScouting.Width - 24;
-                buttonEditing.Left = buttonScouting.Left - buttonEditing.Width - 8;
-                buttonPatcher.Left = buttonEditing.Left - buttonPatcher.Width - 8;
+                Dock = DockStyle.Fill, From = Color.FromArgb(234, 244, 252), To = Color.FromArgb(198, 223, 246), Angle = 55f, Circles = true,
+                Padding = new Padding(26, 18, 26, 18)
             };
 
-            // the saved game
-            fileBar = new Panel { Dock = DockStyle.Top, Height = 78, BackColor = Theme.DarkNavy };
-            fileBar.Controls.Add(new Label { Text = "Saved game (.sav):", ForeColor = Color.White, Font = Theme.Bold, Left = 16, Top = 10, AutoSize = true });
-            textBoxFile = new TextBox { Left = 16, Top = 30, Width = 1000 };
+            // the top bar: the saved game, like a search box
+            topBar = new Panel { Dock = DockStyle.Top, Height = 84, BackColor = Color.Transparent };
+            searchBox = new RoundPanel { Left = 0, Top = 0, Height = 58, Width = 700, Radius = 22, ShadowSize = 7, ShadowAlpha = 30 };
+            searchBox.Paint += delegate(object sender, PaintEventArgs e)
+            {
+                int icon = Theme.Px(e.Graphics, 18);
+                Theme.DrawIcon(e.Graphics, "search", new Rectangle(Theme.Px(e.Graphics, 26), (searchBox.Height - icon) / 2, icon, icon), Theme.Blue, 2f * e.Graphics.DpiX / 96f);
+            };
+            textBoxFile = new TextBox
+            {
+                Left = 58, Width = 600, BorderStyle = BorderStyle.None, BackColor = Color.White, ForeColor = Theme.Text,
+                Font = new Font("Segoe UI", 10.5f), Tag = "keep"
+            };
+            textBoxFile.Top = (searchBox.Height - textBoxFile.Height) / 2;
             textBoxFile.TextChanged += delegate { LoadSave(); };
-            buttonBrowse = new Button { Text = "Browse...", Top = 28, Width = 90, Height = 24 };
+            textBoxFile.HandleCreated += delegate { SendMessage(textBoxFile.Handle, 0x1501, (IntPtr)1, "Choose a saved game (.sav) with Browse..."); };
+            searchBox.Controls.Add(textBoxFile);
+            buttonBrowse = new ModernButton { Text = "Browse...", Width = 120, Height = 42, Top = 8, Kind = ButtonKind.Primary };
             buttonBrowse.Click += buttonBrowse_Click;
-            fileBar.Controls.Add(textBoxFile);
-            fileBar.Controls.Add(buttonBrowse);
-            labelStatus = new Label { Left = 16, Top = 56, Width = 1000, Height = 18, Text = "", ForeColor = StatusColor };
-            fileBar.Controls.Add(labelStatus);
-            fileBar.Resize += delegate
+            labelStatus = new Label { Left = 22, Top = 60, Width = 800, Height = 20, Text = "", ForeColor = StatusColor, BackColor = Color.Transparent };
+            topBar.Controls.Add(searchBox);
+            topBar.Controls.Add(buttonBrowse);
+            topBar.Controls.Add(labelStatus);
+            topBar.Resize += delegate
             {
-                buttonBrowse.Left = fileBar.ClientSize.Width - buttonBrowse.Width - 16;
-                textBoxFile.Width = buttonBrowse.Left - 8 - textBoxFile.Left;
-                labelStatus.Width = fileBar.ClientSize.Width - 32;
+                buttonBrowse.Left = topBar.ClientSize.Width - buttonBrowse.Width - Scaled(6);
+                searchBox.Width = buttonBrowse.Left - Scaled(14);
+                textBoxFile.Width = searchBox.Width - textBoxFile.Left - Scaled(30);
+                labelStatus.Width = topBar.ClientSize.Width - Scaled(30);
             };
 
             // the editing tabs and the scouting tabs (and the first screen) share the middle
-            body = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12, 12, 12, 8), BackColor = Theme.DarkNavy };
+            body = new Panel { Dock = DockStyle.Fill, BackColor = Color.White };
 
-            tabs = new TabControl { Dock = DockStyle.Fill, Visible = false };
+            tabs = new ModernTabs { Dock = DockStyle.Fill, Visible = false };
             BuildClubsTab();
             BuildCompetitionsTab();
             Action contractsChanged = delegate { playerContracts.RefreshEdits(); staffContracts.RefreshEdits(); };
@@ -151,16 +160,14 @@ namespace CM3SaveGameEditor
             tabs.TabPages.Add(NestedTabs("Nationality", playerNations, staffNations));
             BuildPeopleTab();
             BuildSubstitutesTab();
-            Theme.StyleTabs(tabs);
 
-            scoutTabs = new TabControl { Dock = DockStyle.Fill, Visible = false };
+            scoutTabs = new ModernTabs { Dock = DockStyle.Fill, Visible = false };
             playerScouting = new ScoutingPanel("Players", "players", ScoutFields.Set, "Plays as", null);
             scoutTabs.TabPages.Add(playerScouting);
             staffScouting = new ScoutingPanel("Staff", "staff", StaffFields.Set, "Job", StaffFields.Jobs);
             scoutTabs.TabPages.Add(staffScouting);
             playerScouting.ShowHiddenChanged += delegate { staffScouting.ShowHidden = playerScouting.ShowHidden; };
             staffScouting.ShowHiddenChanged += delegate { playerScouting.ShowHidden = staffScouting.ShowHidden; };
-            Theme.StyleTabs(scoutTabs);
 
             BuildWelcome();
             patcher = new PatcherPanel { Dock = DockStyle.Fill, Visible = false };
@@ -169,88 +176,207 @@ namespace CM3SaveGameEditor
             body.Controls.Add(tabs);
             body.Controls.Add(scoutTabs);
 
+            contentCard = new RoundPanel { Dock = DockStyle.Fill, Radius = 20, ShadowSize = 9, ShadowAlpha = 40, Padding = new Padding(9 + 8) };
+            contentCard.Controls.Add(body);
+
             // writing the changes (the editing tabs only)
-            footer = new Panel { Dock = DockStyle.Bottom, Height = 74, BackColor = Theme.DarkNavy, Visible = false };
+            footer = new RoundPanel { Dock = DockStyle.Bottom, Height = 104, Radius = 20, ShadowSize = 8, ShadowAlpha = 34, Visible = false };
             checkBoxOverwrite = new CheckBox
             {
                 Text = "Overwrite this saved game (a .bak copy is made first). Otherwise a new file is saved next to it.",
-                Left = 16, Top = 8, AutoSize = true, Checked = false, ForeColor = Color.White
+                Left = 30, Top = 20, AutoSize = true, Checked = false, BackColor = Color.White
             };
             footer.Controls.Add(checkBoxOverwrite);
-            buttonApply = new Button { Text = "Apply", Left = 16, Top = 34, Width = 140, Height = 30, Enabled = false, Font = Theme.Bold };
+            buttonApply = new ModernButton { Text = "Apply", Left = 30, Top = 50, Width = 150, Height = 40, Enabled = false, Kind = ButtonKind.Primary };
             buttonApply.Click += buttonApply_Click;
             footer.Controls.Add(buttonApply);
             labelNote = new Label
             {
-                Left = 172, Top = 34, Width = 900, Height = 34, ForeColor = StatusColor,
+                Left = 200, Top = 54, Width = 900, Height = 40, ForeColor = StatusColor, BackColor = Color.White,
                 Text = "Close the game first. Everything you have changed on the Clubs, Competitions, Contracts, Attributes, Nationality, People and Substitutes tabs is written in one go."
             };
             footer.Controls.Add(labelNote);
+            footer.Resize += delegate { labelNote.Width = Math.Max(Scaled(200), footer.ClientSize.Width - labelNote.Left - Scaled(30)); };
 
-            Controls.Add(body);
-            Controls.Add(footer);
-            Controls.Add(fileBar);
-            Controls.Add(header);
+            mainArea.Controls.Add(contentCard);
+            mainArea.Controls.Add(footer);
+            mainArea.Controls.Add(topBar);
+            Controls.Add(mainArea);
+            Controls.Add(sidebar);
 
-            Theme.StyleButton(buttonBrowse, true);
-            Theme.StyleButton(buttonApply, true);
-            Theme.StyleButton(buttonPatcher, false);
-            Theme.StyleButton(buttonEditing, false);
-            Theme.StyleButton(buttonScouting, false);
-            Theme.StyleButton(buttonExit, true);
-            buttonBrowse.Tag = buttonApply.Tag = buttonPatcher.Tag = buttonEditing.Tag = buttonScouting.Tag = buttonExit.Tag = "styled";
             Theme.Apply(this);
             ShowMode(ModeHome);
             if (startMode != ModeHome)
                 ShowMode(startMode);
         }
 
-        // The first screen: Editing or Scouting
+        // Never bigger than the screen
+        protected override void OnLoad(EventArgs e)
+        {
+            base.OnLoad(e);
+            Rectangle area = Screen.FromControl(this).WorkingArea;
+            if (Width > area.Width || Height > area.Height)
+            {
+                Size = new Size(Math.Min(Width, area.Width), Math.Min(Height, area.Height));
+                Location = new Point(area.Left + (area.Width - Width) / 2, area.Top + (area.Height - Height) / 2);
+            }
+        }
+
+        // The sidebar: the logo and the parts of the app
+        void BuildSidebar()
+        {
+            sidebar = new GradientPanel
+            {
+                Dock = DockStyle.Left, Width = 240, From = Color.FromArgb(52, 128, 208), To = Theme.Navy, Angle = 80f, Circles = true
+            };
+            sidebar.Paint += delegate(object sender, PaintEventArgs e)
+            {
+                Graphics g = e.Graphics;
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                int k = Theme.Px(g, 1);
+                if (sidebarCompact)
+                {
+                    Theme.DrawBall(g, new Rectangle((sidebar.Width - Theme.Px(g, 40)) / 2, Theme.Px(g, 24), Theme.Px(g, 40), Theme.Px(g, 40)));
+                    return;
+                }
+                Theme.DrawBall(g, new Rectangle(Theme.Px(g, 24), Theme.Px(g, 24), Theme.Px(g, 48), Theme.Px(g, 48)));
+                using (Font title = new Font("Segoe UI", 16f, FontStyle.Bold))
+                    TextRenderer.DrawText(g, "CM3 Utils", title, new Point(Theme.Px(g, 82), Theme.Px(g, 22)), Color.White, TextFormatFlags.NoPadding);
+                using (Font small = new Font("Segoe UI", 8.5f, FontStyle.Bold))
+                    TextRenderer.DrawText(g, "by Scottapotamus", small, new Point(Theme.Px(g, 84), Theme.Px(g, 56)), Theme.Gold, TextFormatFlags.NoPadding);
+                using (Font caption = new Font("Segoe UI", 8f, FontStyle.Bold))
+                    TextRenderer.DrawText(g, "MENU", caption, new Point(Theme.Px(g, 28), Theme.Px(g, 108)), Color.FromArgb(170, 205, 240), TextFormatFlags.NoPadding);
+            };
+
+            navHome = new NavItem { Text = "Home", Icon = "home", Left = 0, Top = 132, Width = 240 };
+            navPatcher = new NavItem { Text = "Patcher", Icon = "patcher", Left = 0, Top = 184, Width = 240 };
+            navEditing = new NavItem { Text = "Editing", Icon = "editing", Left = 0, Top = 236, Width = 240 };
+            navScouting = new NavItem { Text = "Scouting", Icon = "scouting", Left = 0, Top = 288, Width = 240 };
+            navExit = new NavItem { Text = "Exit", Icon = "exit", Left = 0, Width = 240, Anchor = AnchorStyles.Left | AnchorStyles.Bottom };
+            navHome.Click += delegate { ShowMode(ModeHome); };
+            navPatcher.Click += delegate { ChooseMode(ModePatcher); };
+            navEditing.Click += delegate { ChooseMode(ModeEditing); };
+            navScouting.Click += delegate { ChooseMode(ModeScouting); };
+            navExit.Click += delegate { ExitApplication(); };
+            navToggle = new NavItem { Text = "Hide menu", Icon = "menu", Left = 0, Width = 240, Anchor = AnchorStyles.Left | AnchorStyles.Bottom };
+            navToggle.Click += delegate { SetSidebarCompact(!sidebarCompact); };
+            sidebar.Controls.Add(navToggle);
+            navSupport = new NavItem { Text = "Support me", Icon = "heart", Left = 0, Width = 240, Anchor = AnchorStyles.Left | AnchorStyles.Bottom };
+            navSupport.Click += delegate { OpenSupportPage(); };
+            sidebar.Controls.Add(navSupport);
+            // the logo and the name are a link too
+            Rectangle logoArea = new Rectangle(0, 0, 10000, Scaled(100));
+            sidebar.MouseMove += delegate(object sender, MouseEventArgs e) { sidebar.Cursor = logoArea.Contains(e.Location) ? Cursors.Hand : Cursors.Default; };
+            sidebar.MouseClick += delegate(object sender, MouseEventArgs e) { if (e.Button == MouseButtons.Left && logoArea.Contains(e.Location)) OpenSupportPage(); };
+            sidebar.Controls.Add(navHome);
+            sidebar.Controls.Add(navPatcher);
+            sidebar.Controls.Add(navEditing);
+            sidebar.Controls.Add(navScouting);
+            sidebar.Controls.Add(navExit);
+            sidebar.Resize += delegate
+            {
+                navExit.Top = sidebar.ClientSize.Height - navExit.Height - Scaled(22);
+                navToggle.Top = navExit.Top - navToggle.Height - Scaled(6);
+                navSupport.Top = navToggle.Top - navSupport.Height - Scaled(6);
+            };
+        }
+
+        void OpenSupportPage()
+        {
+            try { System.Diagnostics.Process.Start(SupportUrl); }
+            catch (Exception ex) { MessageBox.Show(this, "Could not open " + SupportUrl + "\n" + ex.Message, "CM3 Utils"); }
+        }
+
+        // The sidebar either shows its names or just the icons
+        void SetSidebarCompact(bool compact)
+        {
+            sidebarCompact = compact;
+            sidebar.Width = Scaled(compact ? 72 : 240);
+            foreach (NavItem item in new NavItem[] { navHome, navPatcher, navEditing, navScouting, navExit, navToggle, navSupport })
+            {
+                item.Compact = compact;
+                item.Width = sidebar.Width;
+                item.Invalidate();
+            }
+            navToggle.Text = compact ? "Show menu" : "Hide menu";
+            sidebar.Invalidate();
+        }
+
+        // The first screen: Patcher, Editing or Scouting
         void BuildWelcome()
         {
-            welcome = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Page };
-            labelWelcome = new Label
+            welcome = new Panel { Dock = DockStyle.Fill, BackColor = Color.White };
+            labelWelcome = new Label { Text = "Welcome to CM3 Utils", Font = Theme.Title, ForeColor = Theme.Navy, AutoSize = true, BackColor = Color.White };
+            labelSub = new Label
             {
-                Text = "What would you like to do?", Font = new Font("Arial", 18f, FontStyle.Bold), ForeColor = Theme.Navy, AutoSize = true
+                Text = "Patch the game, edit your saved games and scout players, all in one place.",
+                Font = new Font("Segoe UI", 11f), ForeColor = Theme.Muted, AutoSize = true, BackColor = Color.White
             };
             labelHint = new Label
             {
                 Text = "Editing and Scouting work on a saved game: pick one with Browse above (or choose and you will be asked). Close the game first when editing or patching.",
-                ForeColor = Color.FromArgb(70, 70, 100), AutoSize = true
+                ForeColor = Theme.Muted, AutoSize = true, BackColor = Color.White
             };
-            tiles = new Panel { Width = 960, Height = 130, BackColor = Theme.Page };
-            Tile patching = new Tile
+            tiles = new Panel { Width = 1000, Height = 270, BackColor = Color.White };
+            tilePatcher = new Tile
             {
-                Left = 0, Top = 0, Width = 306, Height = 130, Title = "PATCHER"
+                Top = 0, Height = 270, Title = "Patcher", Icon = "patcher", Accent = Theme.Gold, IconColor = Theme.Navy,
+                Description = "Run Championship Manager 3 at any resolution, with modern text, attribute highlights and better rules."
             };
-            Tile editing = new Tile
+            tileEditing = new Tile
             {
-                Left = 327, Top = 0, Width = 306, Height = 130, Title = "EDITING"
+                Top = 0, Height = 270, Title = "Editing", Icon = "editing", Accent = Theme.Blue,
+                Description = "Edit clubs, competitions, contracts, attributes, nationalities and people in a saved game."
             };
-            Tile scouting = new Tile
+            tileScouting = new Tile
             {
-                Left = 654, Top = 0, Width = 306, Height = 130, Title = "SCOUTING"
+                Top = 0, Height = 270, Title = "Scouting", Icon = "scouting", Accent = Theme.Red,
+                Description = "Search every player and member of staff in a saved game and compare their numbers."
             };
-            patching.Click += delegate { ChooseMode(ModePatcher); };
-            editing.Click += delegate { ChooseMode(ModeEditing); };
-            scouting.Click += delegate { ChooseMode(ModeScouting); };
-            tiles.Controls.Add(patching);
-            tiles.Controls.Add(editing);
-            tiles.Controls.Add(scouting);
+            tilePatcher.Click += delegate { ChooseMode(ModePatcher); };
+            tileEditing.Click += delegate { ChooseMode(ModeEditing); };
+            tileScouting.Click += delegate { ChooseMode(ModeScouting); };
+            tiles.Controls.Add(tilePatcher);
+            tiles.Controls.Add(tileEditing);
+            tiles.Controls.Add(tileScouting);
             welcome.Controls.Add(labelWelcome);
+            welcome.Controls.Add(labelSub);
             welcome.Controls.Add(tiles);
             welcome.Controls.Add(labelHint);
             welcome.Resize += delegate
             {
+                int width = Math.Max(Scaled(210), Math.Min(Scaled(340), (welcome.ClientSize.Width - Scaled(40)) / 3));
+                int height = Scaled(270);
+                tiles.Width = 3 * width;
+                tiles.Height = height;
+                tilePatcher.SetBounds(0, 0, width, height);
+                tileEditing.SetBounds(width, 0, width, height);
+                tileScouting.SetBounds(2 * width, 0, width, height);
                 int center = welcome.ClientSize.Width / 2;
-                int top = Math.Max(20, (welcome.ClientSize.Height - 320) / 2);
+                int top = Math.Max(Scaled(16), (welcome.ClientSize.Height - Scaled(450)) / 2);
                 labelWelcome.Left = center - labelWelcome.Width / 2;
                 labelWelcome.Top = top;
+                labelSub.Left = center - labelSub.Width / 2;
+                labelSub.Top = labelWelcome.Bottom + Scaled(4);
                 tiles.Left = center - tiles.Width / 2;
-                tiles.Top = top + 60;
-                labelHint.Left = center - labelHint.Width / 2;
-                labelHint.Top = tiles.Bottom + 20;
+                tiles.Top = labelSub.Bottom + Scaled(30);
+                labelHint.Left = Math.Max(Scaled(10), center - labelHint.Width / 2);
+                labelHint.Top = tiles.Bottom + Scaled(18);
             };
+        }
+
+        // Whether a club or a competition is being renamed
+        bool NamesChanged()
+        {
+            if (competitionEdits.Count > 0)
+                return true;
+            foreach (SaveGameFile.Club club in clubs)
+            {
+                SaveGameFile.ClubEdit edit;
+                if (edits.TryGetValue(club.Id, out edit) && (edit.Name != club.Name || edit.ShortName != club.ShortName))
+                    return true;
+            }
+            return false;
         }
 
         bool HasChanges()
@@ -283,27 +409,21 @@ namespace CM3SaveGameEditor
             tabs.Visible = mode == ModeEditing;
             scoutTabs.Visible = mode == ModeScouting;
             footer.Visible = mode == ModeEditing;
-            fileBar.Visible = mode != ModePatcher;      // the patcher picks cm3.exe, not a saved game
-            ModeButton(buttonPatcher, mode == ModePatcher);
-            ModeButton(buttonEditing, mode == ModeEditing);
-            ModeButton(buttonScouting, mode == ModeScouting);
-        }
-
-        static void ModeButton(Button button, bool active)
-        {
-            button.BackColor = active ? Theme.Yellow : Theme.Navy;
-            button.ForeColor = active ? Theme.Navy : Theme.Yellow;
+            topBar.Visible = mode != ModePatcher;       // the patcher picks cm3.exe, not a saved game
+            navHome.SetActive(mode == ModeHome);
+            navPatcher.SetActive(mode == ModePatcher);
+            navEditing.SetActive(mode == ModeEditing);
+            navScouting.SetActive(mode == ModeScouting);
         }
 
         // A tab with two tabs inside
         static TabPage NestedTabs(string title, TabPage first, TabPage second)
         {
             TabPage page = new TabPage(title);
-            TabControl inner = new TabControl { Dock = DockStyle.Fill };
+            ModernTabs inner = new ModernTabs { Dock = DockStyle.Fill };
             inner.TabPages.Add(first);
             inner.TabPages.Add(second);
-            Theme.StyleTabs(inner);
-            inner.ItemSize = new Size(110, 26);
+            inner.ItemSize = new Size(110, 32);
             page.Controls.Add(inner);
             return page;
         }
@@ -550,6 +670,13 @@ namespace CM3SaveGameEditor
                 MessageBox.Show(this, string.Format("You are about to remove {0} player(s) / staff from the game. This can't be undone once it is written" +
                     (checkBoxOverwrite.Checked ? " (and you chose to overwrite the saved game; only the .bak copy keeps them)." : " (the original saved game is kept as it is).") +
                     "\n\nContinue?", removedPeople.Count), Text, MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+                return;
+
+            if (NamesChanged() &&
+                MessageBox.Show(this, "You have renamed clubs or competitions. Editing names may break your saved game (for example, other " +
+                    "parts of the game may still look things up by the old name).\n\nMake sure you have a backup" +
+                    (checkBoxOverwrite.Checked ? " (a .bak copy is made when overwriting)" : " (the original saved game is kept as it is)") +
+                    ".\n\nContinue?", Text, MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
                 return;
 
             string source = textBoxFile.Text;

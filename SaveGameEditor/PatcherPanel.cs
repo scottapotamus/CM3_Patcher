@@ -202,7 +202,7 @@ namespace CM3SaveGameEditor
             top.Controls.Add(new Label { Text = "Championship Manager 3 exe (cm3.exe):", Left = 12, Top = 10, AutoSize = true, Font = Theme.Bold });
             textBoxFile = new TextBox { Left = 12, Top = 30, Width = 420 };
             textBoxFile.TextChanged += delegate { RefreshCurrent(); };
-            buttonBrowse = new Button { Text = "Browse...", Left = 440, Top = 28, Width = 76, Height = 24 };
+            buttonBrowse = new ModernButton { Text = "Browse...", Left = 440, Top = 28, Width = 76, Height = 24 };
             buttonBrowse.Click += buttonBrowse_Click;
             top.Controls.Add(textBoxFile);
             top.Controls.Add(buttonBrowse);
@@ -217,7 +217,7 @@ namespace CM3SaveGameEditor
                 labelCurrent.Width = top.ClientSize.Width - 24;
             };
 
-            tabs = new TabControl { Dock = DockStyle.Fill };
+            tabs = new ModernTabs { Dock = DockStyle.Fill };
             Controls.Add(tabs);
             Controls.Add(top);
             tabs.BringToFront();
@@ -241,7 +241,7 @@ namespace CM3SaveGameEditor
             tabs.TabPages.Add(page);
 
             Panel bar = new Panel { Dock = DockStyle.Bottom, Height = 52, BackColor = Theme.Page };
-            Button button = new Button { Text = "Apply", Left = 12, Top = 10, Width = 140, Height = 32, Font = Theme.Bold };
+            Button button = new ModernButton { Text = "Apply", Left = 12, Top = 10, Width = 140, Height = 32, Font = Theme.Bold };
             button.Click += apply;
             bar.Controls.Add(button);
             bar.Controls.Add(new Label { Text = applyHint, Left = 164, Top = 18, AutoSize = true, ForeColor = Color.FromArgb(80, 80, 110) });
@@ -269,7 +269,7 @@ namespace CM3SaveGameEditor
 
         GroupBox NewCard(Panel content, string title, int height)
         {
-            GroupBox card = new GroupBox { Text = title, Left = 12, Top = NextTop(content), Width = 680, Height = height, ForeColor = Theme.Navy };
+            GroupBox card = new CardBox { Text = title, Left = 12, Top = NextTop(content), Width = 680, Height = height, ForeColor = Theme.Navy };
             content.Controls.Add(card);
             cards.Add(card);
             return card;
@@ -542,7 +542,7 @@ namespace CM3SaveGameEditor
         // A small button showing a colour; clicking it opens the colour picker
         Button MakeColourButton(int left, int top, Color colour)
         {
-            Button button = new Button { Left = left, Top = top, Width = 60, Height = 24, BackColor = colour, FlatStyle = FlatStyle.Flat, Enabled = false, Tag = "styled" };
+            Button button = new ModernButton { Left = left, Top = top, Width = 60, Height = 24, BackColor = colour, Swatch = true, Enabled = false };
             button.Click += delegate
             {
                 using (ColorDialog dialog = new ColorDialog { Color = button.BackColor, FullOpen = true })

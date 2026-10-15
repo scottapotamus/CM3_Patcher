@@ -53,7 +53,7 @@ namespace CM3SaveGameEditor
             listClubs.SelectedIndexChanged += delegate { ShowSelectedClub(); };
             page.Controls.Add(listClubs);
 
-            GroupBox group = new GroupBox { Text = "The selected club", Left = 10, Top = 248, Width = 760, Height = 190 };
+            GroupBox group = new CardBox { Text = "The selected club  -  warning: renaming a club may break your saved game", Left = 10, Top = 248, Width = 760, Height = 190 };
             page.Controls.Add(group);
 
             group.Controls.Add(new Label { Text = "Club name:", Left = 10, Top = 28, AutoSize = true });
@@ -76,9 +76,9 @@ namespace CM3SaveGameEditor
             };
             group.Controls.Add(numericBalance);
             group.Controls.Add(new Label { Text = "Add:", Left = 244, Top = 92, AutoSize = true });
-            buttonAdd1 = new Button { Text = "+1m", Left = 276, Top = 86, Width = 52, Enabled = false };
-            buttonAdd10 = new Button { Text = "+10m", Left = 332, Top = 86, Width = 52, Enabled = false };
-            buttonAdd50 = new Button { Text = "+50m", Left = 388, Top = 86, Width = 52, Enabled = false };
+            buttonAdd1 = new ModernButton { Text = "+1m", Left = 276, Top = 86, Width = 52, Enabled = false };
+            buttonAdd10 = new ModernButton { Text = "+10m", Left = 332, Top = 86, Width = 52, Enabled = false };
+            buttonAdd50 = new ModernButton { Text = "+50m", Left = 388, Top = 86, Width = 52, Enabled = false };
             buttonAdd1.Click += delegate { AddToBalance(1000000m); };
             buttonAdd10.Click += delegate { AddToBalance(10000000m); };
             buttonAdd50.Click += delegate { AddToBalance(50000000m); };
@@ -98,12 +98,12 @@ namespace CM3SaveGameEditor
             labelStadiumNote = new Label { Left = 96, Top = 148, Width = 650, Height = 34, Text = "" };
             group.Controls.Add(labelStadiumNote);
 
-            buttonSetClub = new Button { Text = "Set", Left = 10, Top = 446, Width = 80, Enabled = false };
+            buttonSetClub = new ModernButton { Text = "Set", Left = 10, Top = 446, Width = 80, Enabled = false };
             buttonSetClub.Click += delegate { SetSelectedClub(); };
             page.Controls.Add(buttonSetClub);
             labelEdits = new Label { Left = 100, Top = 452, Width = 380, Height = 18, Text = "" };
             page.Controls.Add(labelEdits);
-            buttonClearEdits = new Button { Text = "Clear all", Left = 500, Top = 446, Width = 74, Enabled = false };
+            buttonClearEdits = new ModernButton { Text = "Clear all", Left = 500, Top = 446, Width = 74, Enabled = false };
             buttonClearEdits.Click += delegate { edits.Clear(); FillClubs(); ShowSelectedClub(); UpdateEdits(); };
             page.Controls.Add(buttonClearEdits);
 

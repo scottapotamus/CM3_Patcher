@@ -1,7 +1,10 @@
 # CM3 Utils by Scottapotamus
 
 One app for Championship Manager 3 (v3.04e): the **Patcher** (this document), the saved game **Editing** and **Scouting**
-(see `SaveGameEditor\README.md`). Start it and pick one on the first screen or with the buttons in the red title bar.
+(see `SaveGameEditor\README.md`). Start it and pick one on the first screen or from the menu down the left side.
+
+The menu can be collapsed to just its icons with "Hide menu" (above Exit) if you want more room. The logo, the name at the
+top and "Support me" all open my Buy Me a Coffee page, if you find the tools useful: https://buymeacoffee.com/scottevanso
 
 The Patcher is a tool that lets Championship Manager 3 (v3.04e, `cm3.exe`) run at resolutions other than 800x600, with
 smoother scaling, sharper fonts and an optional modern-text mode.
