@@ -165,6 +165,12 @@ The "People" tab adds new players and staff and takes others out of the game; Ap
 - Not every file that mentions a person is updated (stats, history, squad lists in competition files), so check the result in
   the game; keep the original save (Apply writes `<name>_edited.sav` unless you tick Overwrite).
 
+## Nationality
+
+The "Nationality" tab (players and staff) changes a person's nationality and sets or removes a second nationality. Both are in
+`staff.dat`: nationality at +26 and second nationality at +30 (u16 nation ids from `nation.dat`; 0xFFFF = none). Whether the game's
+work permit rule honours the second nationality hasn't been tested in the game yet.
+
 ## Substitutes rules
 
 CM3 stores the substitutes rules in every fixture when the fixture is created, so patching `cm3.exe` (the CM3 Patcher's

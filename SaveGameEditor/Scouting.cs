@@ -21,6 +21,8 @@ namespace CM3SaveGameEditor
         public string Name;
         public string Club;
         public string Nation;
+        public int NationId = -1;       // the ids in nation.dat; the second nationality is -1 when he has none
+        public int SecondNationId = -1;
         public string Positions;        // where a player plays; the job of a member of staff
         public int[] Values;
     }
@@ -330,6 +332,7 @@ namespace CM3SaveGameEditor
         const int StaffPlayerOffset = 97;
         const int StaffBirthOffset = 16;
         const int StaffNationOffset = 26;
+        const int StaffSecondNationOffset = 30;     // u16, 0xFFFF = none
         const int StaffClubOffset = 57;
         const int NationRecordSize = 290;
         const int GeneralDateOffset = 13;
@@ -431,6 +434,8 @@ namespace CM3SaveGameEditor
                 player.Club = ClubName(clubNames, BitConverter.ToInt32(staff, staffAt + StaffClubOffset));
                 string nation;
                 player.Nation = nationNames.TryGetValue(BitConverter.ToUInt16(staff, staffAt + StaffNationOffset), out nation) ? nation : "";
+                player.NationId = BitConverter.ToUInt16(staff, staffAt + StaffNationOffset);
+                player.SecondNationId = SecondNation(staff, staffAt);
 
                 player.Values = new int[ScoutFields.Count];
                 ScoutFields.Read(player.Values, players, playerAt, staff, staffAt);

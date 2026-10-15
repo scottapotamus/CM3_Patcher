@@ -35,6 +35,9 @@ namespace CM3SaveGameEditor
         AttributesPanel staffAttributes;
         Dictionary<int, int[]> playerAttributeEdits = new Dictionary<int, int[]>();     // staff id -> the numbers as they should be
         Dictionary<int, int[]> staffAttributeEdits = new Dictionary<int, int[]>();
+        NationalityPanel playerNations;
+        NationalityPanel staffNations;
+        Dictionary<int, int[]> nationEdits = new Dictionary<int, int[]>();              // staff id -> { nationality, second nationality or -1 }
         ContractsPanel playerContracts;
         ContractsPanel staffContracts;
         List<SaveGameFile.Contract> contracts = new List<SaveGameFile.Contract>();
@@ -142,6 +145,10 @@ namespace CM3SaveGameEditor
             playerAttributes = new AttributesPanel("Players", false, ScoutFields.Set, playerAttributeEdits, attributesChanged);
             staffAttributes = new AttributesPanel("Staff", true, StaffFields.Set, staffAttributeEdits, attributesChanged);
             tabs.TabPages.Add(NestedTabs("Attributes", playerAttributes, staffAttributes));
+            Action nationsChanged = delegate { };
+            playerNations = new NationalityPanel("Players", false, nationEdits, nationsChanged);
+            staffNations = new NationalityPanel("Staff", true, nationEdits, nationsChanged);
+            tabs.TabPages.Add(NestedTabs("Nationality", playerNations, staffNations));
             BuildPeopleTab();
             BuildSubstitutesTab();
             Theme.StyleTabs(tabs);
@@ -176,7 +183,7 @@ namespace CM3SaveGameEditor
             labelNote = new Label
             {
                 Left = 172, Top = 34, Width = 900, Height = 34, ForeColor = StatusColor,
-                Text = "Close the game first. Everything you have changed on the Clubs, Competitions, Contracts, Attributes, People and Substitutes tabs is written in one go."
+                Text = "Close the game first. Everything you have changed on the Clubs, Competitions, Contracts, Attributes, Nationality, People and Substitutes tabs is written in one go."
             };
             footer.Controls.Add(labelNote);
 
@@ -248,7 +255,7 @@ namespace CM3SaveGameEditor
 
         bool HasChanges()
         {
-            return edits.Count > 0 || contractEdits.Count > 0 || competitionEdits.Count > 0 || newPeople.Count > 0 || removedPeople.Count > 0 || playerAttributeEdits.Count > 0 || staffAttributeEdits.Count > 0;
+            return edits.Count > 0 || contractEdits.Count > 0 || competitionEdits.Count > 0 || newPeople.Count > 0 || removedPeople.Count > 0 || playerAttributeEdits.Count > 0 || staffAttributeEdits.Count > 0 || nationEdits.Count > 0;
         }
 
         // Asks first: changes that were set but not applied are lost
@@ -417,6 +424,9 @@ namespace CM3SaveGameEditor
             staffAttributeEdits.Clear();
             playerAttributes.SetPeople(new List<ScoutPlayer>());
             staffAttributes.SetPeople(new List<ScoutPlayer>());
+            nationEdits.Clear();
+            playerNations.SetPeople(new List<ScoutPlayer>());
+            staffNations.SetPeople(new List<ScoutPlayer>());
             SetPeopleLists(new List<ScoutPlayer>(), new List<ScoutPlayer>());
             playerContracts.SetClubs(clubs);
             staffContracts.SetClubs(clubs);
@@ -470,6 +480,11 @@ namespace CM3SaveGameEditor
                 List<ScoutPlayer> staffMembers = save.StaffMembers();
                 staffScouting.SetPeople(staffMembers);
                 staffAttributes.SetPeople(staffMembers);
+                List<KeyValuePair<int, string>> nationList = save.NationList();
+                playerNations.SetNations(nationList);
+                staffNations.SetNations(nationList);
+                playerNations.SetPeople(players);
+                staffNations.SetPeople(staffMembers);
                 SetPeopleLists(players, staffMembers);
 
                 labelStatus.Text = string.Format("{0} sub-files, {1:0.0} MB, {2} clubs, {3} contracts, {4} players, {5} staff", save.Entries.Count, new FileInfo(textBoxFile.Text).Length / 1048576.0, clubs.Count, contracts.Count, players.Count, staffMembers.Count);
@@ -484,6 +499,8 @@ namespace CM3SaveGameEditor
                 staffScouting.SetPeople(new List<ScoutPlayer>());
                 playerAttributes.SetPeople(new List<ScoutPlayer>());
                 staffAttributes.SetPeople(new List<ScoutPlayer>());
+                playerNations.SetPeople(new List<ScoutPlayer>());
+                staffNations.SetPeople(new List<ScoutPlayer>());
                 labelStatus.ForeColor = Color.Salmon;
                 labelStatus.Text = "Couldn't read this saved game: " + ex.Message;
             }
@@ -525,7 +542,7 @@ namespace CM3SaveGameEditor
             bool changeSubs = checkBoxSubs.Checked;
             if (!changeSubs && !HasChanges())
             {
-                MessageBox.Show(this, "There is nothing to change yet: change a club, a contract, a competition, someone's attributes or the people in the game, or tick the substitutes option.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(this, "There is nothing to change yet: change a club, a contract, a competition, someone's attributes or nationality, the people in the game, or tick the substitutes option.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
@@ -551,7 +568,7 @@ namespace CM3SaveGameEditor
             try
             {
                 Dictionary<SaveGameFile.Entry, byte[]> replaced = new Dictionary<SaveGameFile.Entry, byte[]>();
-                int fixtures = 0, fixturesChanged = 0, balancesChanged = 0, contractsChanged = 0, attributesChanged = 0, competitionsChanged = 0, peopleAdded = 0, peopleRemoved = 0;
+                int fixtures = 0, fixturesChanged = 0, balancesChanged = 0, contractsChanged = 0, attributesChanged = 0, competitionsChanged = 0, peopleAdded = 0, peopleRemoved = 0, nationsChanged = 0;
                 if (changeSubs)
                     fixturesChanged = save.ReplaceSubstitutes(named, used, replaced, out fixtures);
                 if (edits.Count > 0)
@@ -566,6 +583,9 @@ namespace CM3SaveGameEditor
                     peopleRemoved = save.RemovePeople(new List<int>(removedPeople.Keys), replaced);
                 if (playerAttributeEdits.Count > 0 || staffAttributeEdits.Count > 0)
                     attributesChanged = save.ReplaceAttributes(playerAttributeEdits, staffAttributeEdits, replaced);
+
+                if (nationEdits.Count > 0)
+                    nationsChanged = save.ReplaceNations(nationEdits, replaced);
 
                 string written = overwrite ? source + ".new" : target;
                 save.WriteFile(written, replaced);
@@ -669,6 +689,21 @@ namespace CM3SaveGameEditor
                     CheckAttributes(staffAttributeEdits, now, StaffFields.Set, false);
                 }
 
+                if (nationEdits.Count > 0)
+                {
+                    Dictionary<int, ScoutPlayer> now = new Dictionary<int, ScoutPlayer>();
+                    foreach (ScoutPlayer person in check.Players())
+                        now[person.StaffId] = person;
+                    foreach (ScoutPlayer person in check.StaffMembers())
+                        now[person.StaffId] = person;
+                    foreach (KeyValuePair<int, int[]> pair in nationEdits)
+                    {
+                        ScoutPlayer person;
+                        if (!now.TryGetValue(pair.Key, out person) || person.NationId != pair.Value[0] || person.SecondNationId != pair.Value[1])
+                            throw new InvalidDataException("The saved game was written but the check afterwards failed - don't use it.");
+                    }
+                }
+
                 if (overwrite)
                 {
                     string backup = source + ".bak";
@@ -693,6 +728,8 @@ namespace CM3SaveGameEditor
                     message.AppendFormat("{0} player(s) / staff removed.", peopleRemoved).AppendLine();
                 if (playerAttributeEdits.Count > 0 || staffAttributeEdits.Count > 0)
                     message.AppendFormat("{0} player(s) / staff changed in their attributes.", attributesChanged).AppendLine();
+                if (nationEdits.Count > 0)
+                    message.AppendFormat("{0} player(s) / staff changed in their nationality.", nationsChanged).AppendLine();
                 message.AppendLine().AppendFormat("Saved as {0}", target);
                 if (overwrite)
                     message.AppendLine().AppendFormat("(the original is kept as {0}.bak)", source);

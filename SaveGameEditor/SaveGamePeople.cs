@@ -224,6 +224,7 @@ namespace CM3SaveGameEditor
                 WriteInt(record, 12, 0);
                 WriteDate(record, StaffBirthOffset, person.Born);
                 WriteShort(record, StaffNationOffset, person.NationId);
+                WriteShort(record, StaffSecondNationOffset, 0xFFFF);
                 record[StaffJobOffset] = (byte)job;
                 WriteInt(record, StaffClubOffset, person.ClubId);
                 WriteInt(record, 101, staffId);

@@ -217,6 +217,8 @@ namespace CM3SaveGameEditor
                 member.Club = ClubName(clubNames, BitConverter.ToInt32(staff, staffAt + StaffClubOffset));
                 string nation;
                 member.Nation = nationNames.TryGetValue(BitConverter.ToUInt16(staff, staffAt + StaffNationOffset), out nation) ? nation : "";
+                member.NationId = BitConverter.ToUInt16(staff, staffAt + StaffNationOffset);
+                member.SecondNationId = SecondNation(staff, staffAt);
                 int job = staff[staffAt + StaffJobOffset];
                 member.Positions = job < StaffFields.Jobs.Length ? StaffFields.Jobs[job] : "job " + job;
 
