@@ -147,13 +147,23 @@ directors; the Job column says which) and edits the contract type, the wages per
 Players tab does for players (which also has squad status, bonuses and clauses). The changes of both tabs are written
 together by Apply.
 
-## Competitions
+## Competition Editor
 
-The "Competitions" tab lists the leagues and cups (clubs' and national teams') and renames them (name and short name). The names
-are in `club_comp.dat` and `nation_comp.dat` (107 byte records: +0 id, +4 name (52 bytes), +56 short name (24 bytes), +93 the
-nation); each competition's data is in a sub-file called `<name>_<id>.tmp`, which is renamed too (the game builds that name
-when it opens the file). The prize money of a competition is not stored in the save (no prize table in any sub-file or in
-cm3.exe's data), so it can't be edited. Names change in the saved game only. As with clubs, renaming can break the save, so Apply asks you to confirm first.
+The Competition Editor (its own part of the app, not a tab of the editor) renames the leagues and cups (clubs' and national teams') in the
+game and in a saved game together, and the saved game side is what is described here. Renaming in the saved game alone is not
+possible: cm3.exe (v3.04e) has a table of names (the code at about 0x55E000) that it compares every name in the save
+against as it loads, and a real competition that isn't called what it expects makes it stop with "v3.04e index.cpp 1635" (the line
+number depends on which one). That covers all 165 real competitions in the save (the Friendly ones and the empty slots aren't in the
+table). So the exe, the game's own tables and a saved game have to agree, which is what the Competition Editor does (see the
+README of the parent folder for the game's side).
+
+The names are in `club_comp.dat` and `nation_comp.dat` (107 byte records: +0 id, +4 name (52 bytes), +56 short name (24 bytes), +93 the
+nation). The saved game also has the language file (`eng.lng`) with a table of 52 byte name + 24 byte short name pairs, and each
+competition's data is in a sub-file called `<name>_<id>.tmp`, which starts with an 80 byte block that is the competition object's file name buffer (the name, a zero, then leftover bytes; the data follows after exactly those 80 bytes, so a rename only changes the name in the block and never its size, or the game stops with "comp_stats.CPP 5382") and is
+listed in the directory in alphabetical order ignoring case, which is also the order the data is stored in (the end of one
+sub-file is the start of the next). A rename changes the name in all of those and puts the sub-file back in order, because the
+game searches the directory by name. The prize money of a competition is not stored in the save (no prize table in any sub-file
+or in cm3.exe's data), so it can't be edited.
 
 ## People: adding and removing players and staff
 

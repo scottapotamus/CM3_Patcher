@@ -135,6 +135,16 @@ namespace CM3SaveGameEditor
                         g.DrawLine(pen, cx + h * 0.45f, cy - h * 0.5f, cx + h, cy);
                         g.DrawLine(pen, cx + h * 0.45f, cy + h * 0.5f, cx + h, cy);
                         break;
+                    case "trophy":
+                        g.DrawLine(pen, cx - h * 0.55f, cy - h, cx + h * 0.55f, cy - h);
+                        g.DrawLine(pen, cx - h * 0.55f, cy - h, cx - h * 0.55f, cy - h * 0.1f);
+                        g.DrawLine(pen, cx + h * 0.55f, cy - h, cx + h * 0.55f, cy - h * 0.1f);
+                        g.DrawArc(pen, cx - h * 0.55f, cy - h * 0.7f, h * 1.1f, h * 1.1f, 0, 180);
+                        g.DrawArc(pen, cx - h * 1.05f, cy - h * 0.8f, h * 0.7f, h * 0.7f, 90, 180);
+                        g.DrawArc(pen, cx + h * 0.35f, cy - h * 0.8f, h * 0.7f, h * 0.7f, -90, 180);
+                        g.DrawLine(pen, cx, cy + h * 0.4f, cx, cy + h * 0.75f);
+                        g.DrawLine(pen, cx - h * 0.5f, cy + h, cx + h * 0.5f, cy + h);
+                        break;
                     case "heart":
                         {
                             GraphicsPath heart = new GraphicsPath();
@@ -701,7 +711,16 @@ namespace CM3SaveGameEditor
             int inner = Theme.Px(g, 28);
             Theme.DrawIcon(g, Icon, new Rectangle(bubble.Left + (size - inner) / 2, bubble.Top + (size - inner) / 2, inner, inner), IconColor, 2.4f * g.DpiX / 96f);
 
-            using (Font titleFont = new Font("Segoe UI", 15f, FontStyle.Bold))
+            // the title shrinks until it fits
+            float titleSize = 15f;
+            Font titleFont = new Font("Segoe UI", titleSize, FontStyle.Bold);
+            while (titleSize > 9f && TextRenderer.MeasureText(g, Title, titleFont, new Size(10000, 100), TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix).Width > card.Width - 2 * margin)
+            {
+                titleFont.Dispose();
+                titleSize -= 0.5f;
+                titleFont = new Font("Segoe UI", titleSize, FontStyle.Bold);
+            }
+            using (titleFont)
                 TextRenderer.DrawText(g, Title, titleFont, new Rectangle(card.Left + margin, card.Top + Theme.Px(g, 96), card.Width - 2 * margin, Theme.Px(g, 34)), Theme.Navy, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
             TextRenderer.DrawText(g, Description, Theme.Normal, new Rectangle(card.Left + margin, card.Top + Theme.Px(g, 134), card.Width - 2 * margin, card.Height - Theme.Px(g, 184)), Theme.Muted,
                 TextFormatFlags.Left | TextFormatFlags.Top | TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);

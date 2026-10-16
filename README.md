@@ -4,8 +4,15 @@ Version 2.11
 
 **Download:** [latest release (v2.11)](https://github.com/scottapotamus/CM3_Patcher/releases/tag/v2.11) | [zip file](https://github.com/scottapotamus/CM3_Patcher/archive/refs/tags/v2.11.zip)
 
-One app for Championship Manager 3 (v3.04e): the **Patcher** (this document), the saved game **Editing** and **Scouting**
-(see `SaveGameEditor\README.md`). Start it and pick one on the first screen or from the menu down the left side.
+One app for Championship Manager 3 (v3.04e). Start it and pick a part on the first screen or from the menu down the left side:
+
+* **Patcher** (this document): run the game at modern resolutions, with sharper text and some fixes and extras.
+* **Editing**: change clubs, contracts, attributes, nationalities and people in a saved game.
+* **Scouting**: search every player and member of staff in a saved game.
+* **Competition Editor**: rename the game's leagues and cups, in the game and in a saved game together (see
+  *Competition Editor* below).
+
+The editing and scouting are described in `SaveGameEditor\README.md`.
 
 The menu can be collapsed to just its icons with "Hide menu" (above Exit) if you want more room. The logo, the name at the
 top and "Support me" all open my Buy Me a Coffee page, if you find the tools useful: https://buymeacoffee.com/scottevanso
@@ -162,6 +169,67 @@ selected puts the original bytes back. 9 is the maximum because the game holds 2
 
 The rules are stored in each fixture when it is created, so the change applies to **new games** (and fixtures created
 after loading), not to matches already in a saved game's fixture list.
+
+## Competition Editor
+
+Renames the game's leagues and cups, for example turning the European Cup Winners Cup into the Europa League. It is its own
+part of the app (the **Competition Editor** button in the menu) and not a tab of the editor or the patcher, because a name
+has to be changed in the game and in your saved game together.
+
+### Using it
+
+1. Close Championship Manager first.
+2. Choose the saved game you want to keep playing with **Browse** at the top of the window. Skip this if you are only going to
+   start new games.
+3. Check that the **cm3.exe** shown in the panel is your game's (it is found automatically; Browse if not). If the game is in
+   Program Files the editor offers to restart as administrator, because it has to write into the game's folder.
+4. Pick a competition in the list (type in **Find** to narrow it down), type its new **Name** and **Short name** and press **Set**.
+   Rows you have changed turn yellow. Do as many as you like. **Undo** puts one back, **Clear all** drops them all, and
+   **Original** fills in the game's own names for the competition you have selected.
+5. Press **Apply**. The game and the saved game are changed together. The saved game is written as `<name>_renamed.sav` next
+   to the original, unless you tick **Overwrite**, which keeps a `.bak` copy first. The new file is opened at the top of the
+   window afterwards.
+6. Start a new game (or load the renamed saved game) in Championship Manager.
+
+The list shows what is in the game now, the short name and, for ones you have renamed before, the original name. A row
+shaded pink means the game was only half renamed (cm3.exe still has the old name); press **Set** and **Apply** on it to finish.
+If you use **Apply** with nothing changed it makes the chosen saved game use the same names as the game, which is how to bring an
+older save in line after the game has been renamed.
+
+### Limits
+
+* Names can be up to 50 characters, short names up to 24, and only letters the game can show (Western European characters).
+  Two competitions can't have the same name.
+* All 165 real leagues and cups can be renamed (clubs' and national teams'). The Friendly competitions and empty slots aren't
+  listed, they aren't looked up by name.
+* Prize money isn't stored in the game's data in a way this tool can change, so it can't be edited.
+* The game is only changed for new games. A saved game made with the old names stops loading once the game has been renamed,
+  with an error such as `index.cpp 1635` or `comp_stats.CPP 5382`, so rename your saves with this tool too (or keep a copy of the
+  game folder for the old ones).
+* Only cm3.exe v3.04e is supported.
+
+### Backups
+
+The first time, the editor keeps a copy of the original exe as `cm3_original.exe` (untick **Keep a copy of the original exe**
+to skip it) and a `.orig` copy of each other game file it changes (`Data\club_comp.dat`, `nation_comp.dat`, the language
+files and `Pictures\pics.cfg`) next to them. To undo everything, copy those back over the changed files. The saved game
+itself is never changed unless you tick **Overwrite**, and then only after a `.bak` copy has been made.
+
+### Why a name has to be changed in several places
+
+cm3.exe has a built-in table of names (nations, leagues and cups) and compares every name in a game it loads with it, so a real
+competition that isn't called what the exe expects stops the game with `v3.04e index.cpp 1635`. The Competition Editor changes
+the name in:
+
+* **cm3.exe**: a name that fits in the room of the old one is written over it. A longer one, up to 50 characters, is put in a
+  small section of its own that is added to the end of the exe, and the one place that uses the old name is pointed at it.
+* **`Data\club_comp.dat` and `nation_comp.dat`**: what a new game starts from.
+* **`Data\*.lng`** (the language files): where the game shows names from.
+* **`Pictures\pics.cfg`**: the list of pictures for each competition, which is keyed by name.
+* **the saved game**: its own copies of the competition tables, the language file and the competition's data file, which is
+  named after the competition (`<name>_<id>.tmp`) and has the name inside it too.
+
+How the saved game is laid out is described in `SaveGameEditor\README.md`.
 
 ## + / - and scroll buttons repeating too fast
 

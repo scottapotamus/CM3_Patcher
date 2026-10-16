@@ -840,10 +840,11 @@ namespace CM3SaveGameEditor
                 int firstOffset = entries[0].Offset;
                 output.Write(data, 0, firstOffset);
 
-                List<int> newOffsets = new List<int>();
-                foreach (Entry entry in entries)
+                List<Entry> order = OutputOrder();
+                Dictionary<Entry, int> newOffsets = new Dictionary<Entry, int>();
+                foreach (Entry entry in order)
                 {
-                    newOffsets.Add((int)output.Position);
+                    newOffsets[entry] = (int)output.Position;
                     byte[] blob;
                     if (!replaced.TryGetValue(entry, out blob))
                     {
@@ -854,8 +855,8 @@ namespace CM3SaveGameEditor
                 }
                 byte[] result = output.ToArray();
 
-                for (int i = 0; i < entries.Count; i++)
-                    WriteInt(result, entries[i].DirectoryPosition, newOffsets[i]);
+                foreach (Entry entry in entries)
+                    WriteInt(result, entry.DirectoryPosition, newOffsets[entry]);
 
                 // changed sub-files may have a different size now
                 foreach (KeyValuePair<Entry, byte[]> pair in replaced)
@@ -866,6 +867,12 @@ namespace CM3SaveGameEditor
                 }
 
                 ApplyRenames(result);
+
+                // the directory lists the sub-files in the order they are written in
+                byte[] directory = new byte[entries.Count * EntrySize];
+                Array.Copy(result, HeaderSize, directory, 0, directory.Length);
+                for (int i = 0; i < order.Count; i++)
+                    Array.Copy(directory, order[i].DirectoryPosition - HeaderSize, result, HeaderSize + i * EntrySize, EntrySize);
                 File.WriteAllBytes(fileName, result);
             }
         }

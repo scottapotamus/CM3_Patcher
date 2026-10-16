@@ -15,12 +15,16 @@ namespace CM3SaveGameEditor
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
-            // "--patcher": open at the patcher (used when restarting as administrator)
-            bool patcher = false;
+            // "--patcher" / "--competitions": open at the patcher or the Competition Editor (used when restarting as administrator)
+            int mode = 0;
             foreach (string arg in args)
+            {
                 if (string.Equals(arg, "--patcher", StringComparison.OrdinalIgnoreCase))
-                    patcher = true;
-            Application.Run(new MainForm(patcher ? 1 : 0));
+                    mode = 1;
+                else if (string.Equals(arg, "--competitions", StringComparison.OrdinalIgnoreCase))
+                    mode = 4;
+            }
+            Application.Run(new MainForm(mode));
         }
     }
 }

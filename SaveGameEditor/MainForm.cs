@@ -63,10 +63,13 @@ namespace CM3SaveGameEditor
         Tile tilePatcher;
         Tile tileEditing;
         Tile tileScouting;
+        Tile tileCompetitions;
+        CompetitionEditorPanel competitionEditor;
         NavItem navHome;
         NavItem navPatcher;
         NavItem navEditing;
         NavItem navScouting;
+        NavItem navCompetitions;
         NavItem navExit;
         NavItem navToggle;
         NavItem navSupport;
@@ -76,7 +79,7 @@ namespace CM3SaveGameEditor
         PatcherPanel patcher;
         TabControl scoutTabs;
 
-        const int ModeHome = 0, ModePatcher = 1, ModeEditing = 2, ModeScouting = 3;
+        const int ModeHome = 0, ModePatcher = 1, ModeEditing = 2, ModeScouting = 3, ModeCompetitions = 4;
 
         // the display's scale (1 at 96 dpi): sizes that are set while the app runs (the others scale with the form)
         float dpiScale = 1f;
@@ -146,7 +149,6 @@ namespace CM3SaveGameEditor
 
             tabs = new ModernTabs { Dock = DockStyle.Fill, Visible = false };
             BuildClubsTab();
-            BuildCompetitionsTab();
             Action contractsChanged = delegate { playerContracts.RefreshEdits(); staffContracts.RefreshEdits(); };
             playerContracts = new ContractsPanel("Players", false, contractEdits, contractsChanged);
             staffContracts = new ContractsPanel("Staff", true, contractEdits, contractsChanged);
@@ -174,6 +176,9 @@ namespace CM3SaveGameEditor
             BuildWelcome();
             patcher = new PatcherPanel { Dock = DockStyle.Fill, Visible = false };
             body.Controls.Add(patcher);
+            competitionEditor = new CompetitionEditorPanel(delegate { return textBoxFile.Text.Trim(); }) { Dock = DockStyle.Fill, Visible = false };
+            competitionEditor.SaveWritten = delegate(string written) { textBoxFile.Text = written; };
+            body.Controls.Add(competitionEditor);
             body.Controls.Add(welcome);
             body.Controls.Add(tabs);
             body.Controls.Add(scoutTabs);
@@ -195,7 +200,7 @@ namespace CM3SaveGameEditor
             labelNote = new Label
             {
                 Left = 200, Top = 54, Width = 900, Height = 40, ForeColor = StatusColor, BackColor = Color.White,
-                Text = "Close the game first. Everything you have changed on the Clubs, Competitions, Contracts, Attributes, Nationality, People and Substitutes tabs is written in one go."
+                Text = "Close the game first. Everything you have changed on the Clubs, Contracts, Attributes, Nationality, People and Substitutes tabs is written in one go."
             };
             footer.Controls.Add(labelNote);
             footer.Resize += delegate { labelNote.Width = Math.Max(Scaled(200), footer.ClientSize.Width - labelNote.Left - Scaled(30)); };
@@ -258,11 +263,13 @@ namespace CM3SaveGameEditor
             navPatcher = new NavItem { Text = "Patcher", Icon = "patcher", Left = 0, Top = 184, Width = 240 };
             navEditing = new NavItem { Text = "Editing", Icon = "editing", Left = 0, Top = 236, Width = 240 };
             navScouting = new NavItem { Text = "Scouting", Icon = "scouting", Left = 0, Top = 288, Width = 240 };
+            navCompetitions = new NavItem { Text = "Competition Editor", Icon = "trophy", Left = 0, Top = 340, Width = 240 };
             navExit = new NavItem { Text = "Exit", Icon = "exit", Left = 0, Width = 240, Anchor = AnchorStyles.Left | AnchorStyles.Bottom };
             navHome.Click += delegate { ShowMode(ModeHome); };
             navPatcher.Click += delegate { ChooseMode(ModePatcher); };
             navEditing.Click += delegate { ChooseMode(ModeEditing); };
             navScouting.Click += delegate { ChooseMode(ModeScouting); };
+            navCompetitions.Click += delegate { ChooseMode(ModeCompetitions); };
             navExit.Click += delegate { ExitApplication(); };
             navToggle = new NavItem { Text = "Hide menu", Icon = "menu", Left = 0, Width = 240, Anchor = AnchorStyles.Left | AnchorStyles.Bottom };
             navToggle.Click += delegate { SetSidebarCompact(!sidebarCompact); };
@@ -278,6 +285,7 @@ namespace CM3SaveGameEditor
             sidebar.Controls.Add(navPatcher);
             sidebar.Controls.Add(navEditing);
             sidebar.Controls.Add(navScouting);
+            sidebar.Controls.Add(navCompetitions);
             sidebar.Controls.Add(navExit);
             sidebar.Resize += delegate
             {
@@ -298,7 +306,7 @@ namespace CM3SaveGameEditor
         {
             sidebarCompact = compact;
             sidebar.Width = Scaled(compact ? 72 : 240);
-            foreach (NavItem item in new NavItem[] { navHome, navPatcher, navEditing, navScouting, navExit, navToggle, navSupport })
+            foreach (NavItem item in new NavItem[] { navHome, navPatcher, navEditing, navScouting, navCompetitions, navExit, navToggle, navSupport })
             {
                 item.Compact = compact;
                 item.Width = sidebar.Width;
@@ -315,7 +323,7 @@ namespace CM3SaveGameEditor
             labelWelcome = new Label { Text = "Welcome to CM3 Utils", Font = Theme.Title, ForeColor = Theme.Navy, AutoSize = true, BackColor = Color.White };
             labelSub = new Label
             {
-                Text = "Patch the game, edit your saved games and scout players, all in one place.",
+                Text = "Patch the game, edit your saved games, scout players and rename competitions, all in one place.",
                 Font = new Font("Segoe UI", 11f), ForeColor = Theme.Muted, AutoSize = true, BackColor = Color.White
             };
             labelHint = new Label
@@ -327,37 +335,45 @@ namespace CM3SaveGameEditor
             tilePatcher = new Tile
             {
                 Top = 0, Height = 270, Title = "Patcher", Icon = "patcher", Accent = Theme.Gold, IconColor = Theme.Navy,
-                Description = "Run Championship Manager 3 at any resolution, with modern text, attribute highlights and better rules."
+                Description = "Run the game at any resolution, with modern text and highlights."
             };
             tileEditing = new Tile
             {
                 Top = 0, Height = 270, Title = "Editing", Icon = "editing", Accent = Theme.Blue,
-                Description = "Edit clubs, competitions, contracts, attributes, nationalities and people in a saved game."
+                Description = "Edit clubs, contracts, attributes, nationalities and people in a saved game."
             };
             tileScouting = new Tile
             {
                 Top = 0, Height = 270, Title = "Scouting", Icon = "scouting", Accent = Theme.Red,
-                Description = "Search every player and member of staff in a saved game and compare their numbers."
+                Description = "Search every player and member of staff in a saved game."
             };
+            tileCompetitions = new Tile
+            {
+                Top = 0, Height = 270, Title = "Competition Editor", Icon = "trophy", Accent = Color.FromArgb(30, 132, 86),
+                Description = "Rename the leagues and cups in the game and a saved game."
+            };
+            tileCompetitions.Click += delegate { ChooseMode(ModeCompetitions); };
             tilePatcher.Click += delegate { ChooseMode(ModePatcher); };
             tileEditing.Click += delegate { ChooseMode(ModeEditing); };
             tileScouting.Click += delegate { ChooseMode(ModeScouting); };
             tiles.Controls.Add(tilePatcher);
             tiles.Controls.Add(tileEditing);
             tiles.Controls.Add(tileScouting);
+            tiles.Controls.Add(tileCompetitions);
             welcome.Controls.Add(labelWelcome);
             welcome.Controls.Add(labelSub);
             welcome.Controls.Add(tiles);
             welcome.Controls.Add(labelHint);
             welcome.Resize += delegate
             {
-                int width = Math.Max(Scaled(210), Math.Min(Scaled(340), (welcome.ClientSize.Width - Scaled(40)) / 3));
+                int width = Math.Max(Scaled(210), Math.Min(Scaled(340), (welcome.ClientSize.Width - Scaled(40)) / 4));
                 int height = Scaled(270);
-                tiles.Width = 3 * width;
+                tiles.Width = 4 * width;
                 tiles.Height = height;
                 tilePatcher.SetBounds(0, 0, width, height);
                 tileEditing.SetBounds(width, 0, width, height);
                 tileScouting.SetBounds(2 * width, 0, width, height);
+                tileCompetitions.SetBounds(3 * width, 0, width, height);
                 int center = welcome.ClientSize.Width / 2;
                 int top = Math.Max(Scaled(16), (welcome.ClientSize.Height - Scaled(450)) / 2);
                 labelWelcome.Left = center - labelWelcome.Width / 2;
@@ -371,11 +387,9 @@ namespace CM3SaveGameEditor
             };
         }
 
-        // Whether a club or a competition is being renamed
+        // Whether a club is being renamed
         bool NamesChanged()
         {
-            if (competitionEdits.Count > 0)
-                return true;
             foreach (SaveGameFile.Club club in clubs)
             {
                 SaveGameFile.ClubEdit edit;
@@ -387,7 +401,7 @@ namespace CM3SaveGameEditor
 
         bool HasChanges()
         {
-            return edits.Count > 0 || contractEdits.Count > 0 || competitionEdits.Count > 0 || newPeople.Count > 0 || removedPeople.Count > 0 || playerAttributeEdits.Count > 0 || staffAttributeEdits.Count > 0 || nationEdits.Count > 0;
+            return edits.Count > 0 || contractEdits.Count > 0 || newPeople.Count > 0 || removedPeople.Count > 0 || playerAttributeEdits.Count > 0 || staffAttributeEdits.Count > 0 || nationEdits.Count > 0;
         }
 
         // Asks first: changes that were set but not applied are lost
@@ -403,7 +417,7 @@ namespace CM3SaveGameEditor
         // From the first screen or the title bar: asks for a saved game first if there isn't one yet
         void ChooseMode(int mode)
         {
-            if ((mode == ModeEditing || mode == ModeScouting) && save == null && textBoxFile.Text.Length == 0)
+            if ((mode == ModeEditing || mode == ModeScouting || mode == ModeCompetitions) && save == null && textBoxFile.Text.Length == 0)
                 buttonBrowse_Click(null, EventArgs.Empty);
             ShowMode(mode);
         }
@@ -414,12 +428,14 @@ namespace CM3SaveGameEditor
             patcher.Visible = mode == ModePatcher;
             tabs.Visible = mode == ModeEditing;
             scoutTabs.Visible = mode == ModeScouting;
+            competitionEditor.Visible = mode == ModeCompetitions;
             footer.Visible = mode == ModeEditing;
             topBar.Visible = mode != ModePatcher;       // the patcher picks cm3.exe, not a saved game
             navHome.SetActive(mode == ModeHome);
             navPatcher.SetActive(mode == ModePatcher);
             navEditing.SetActive(mode == ModeEditing);
             navScouting.SetActive(mode == ModeScouting);
+            navCompetitions.SetActive(mode == ModeCompetitions);
         }
 
         // A tab with two tabs inside
@@ -529,6 +545,8 @@ namespace CM3SaveGameEditor
 
         void LoadSave()
         {
+            if (competitionEditor != null)
+                competitionEditor.RefreshSave();
             save = null;
             clubs.Clear();
             edits.Clear();
@@ -541,11 +559,6 @@ namespace CM3SaveGameEditor
             labelStatus.Text = "";
             textBoxSummary.Text = "";
             listClubs.Items.Clear();
-            competitionEdits.Clear();
-            competitions.Clear();
-            FillCompetitions();
-            ShowSelectedCompetition();
-            UpdateCompetitionEdits();
             playerAttributeEdits.Clear();
             staffAttributeEdits.Clear();
             playerAttributes.SetPeople(new List<ScoutPlayer>());
@@ -596,9 +609,6 @@ namespace CM3SaveGameEditor
                 staffContracts.SetClubs(clubs);
                 playerContracts.SetContracts(contracts);
                 staffContracts.SetContracts(contracts);
-
-                competitions = save.Competitions();
-                FillCompetitions();
 
                 List<ScoutPlayer> players = save.Players();
                 playerScouting.SetPeople(players);
@@ -668,7 +678,7 @@ namespace CM3SaveGameEditor
             bool changeSubs = checkBoxSubs.Checked;
             if (!changeSubs && !HasChanges())
             {
-                MessageBox.Show(this, "There is nothing to change yet: change a club, a contract, a competition, someone's attributes or nationality, the people in the game, or tick the substitutes option.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(this, "There is nothing to change yet: change a club, a contract, someone's attributes or nationality, the people in the game, or tick the substitutes option.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
@@ -679,7 +689,7 @@ namespace CM3SaveGameEditor
                 return;
 
             if (NamesChanged() &&
-                MessageBox.Show(this, "You have renamed clubs or competitions. Editing names may break your saved game (for example, other " +
+                MessageBox.Show(this, "You have renamed clubs. Editing names may break your saved game (for example, other " +
                     "parts of the game may still look things up by the old name).\n\nMake sure you have a backup" +
                     (checkBoxOverwrite.Checked ? " (a .bak copy is made when overwriting)" : " (the original saved game is kept as it is)") +
                     ".\n\nContinue?", Text, MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
@@ -701,15 +711,13 @@ namespace CM3SaveGameEditor
             try
             {
                 Dictionary<SaveGameFile.Entry, byte[]> replaced = new Dictionary<SaveGameFile.Entry, byte[]>();
-                int fixtures = 0, fixturesChanged = 0, balancesChanged = 0, contractsChanged = 0, attributesChanged = 0, competitionsChanged = 0, peopleAdded = 0, peopleRemoved = 0, nationsChanged = 0;
+                int fixtures = 0, fixturesChanged = 0, balancesChanged = 0, contractsChanged = 0, attributesChanged = 0, peopleAdded = 0, peopleRemoved = 0, nationsChanged = 0;
                 if (changeSubs)
                     fixturesChanged = save.ReplaceSubstitutes(named, used, replaced, out fixtures);
                 if (edits.Count > 0)
                     balancesChanged = save.ReplaceClubs(edits, replaced);
                 if (contractEdits.Count > 0)
                     contractsChanged = save.ReplaceContracts(contractEdits, replaced);
-                if (competitionEdits.Count > 0)
-                    competitionsChanged = save.ReplaceCompetitions(competitionEdits, replaced);
                 if (newPeople.Count > 0)
                     peopleAdded = save.AddPeople(newPeople, replaced);
                 if (removedPeople.Count > 0)
@@ -794,19 +802,6 @@ namespace CM3SaveGameEditor
                             throw new InvalidDataException("The saved game was written but the check afterwards failed - don't use it.");
                 }
 
-                if (competitionEdits.Count > 0)
-                {
-                    Dictionary<int, Competition> now = new Dictionary<int, Competition>();
-                    foreach (Competition competition in check.Competitions())
-                        now[competition.Id] = competition;
-                    foreach (KeyValuePair<int, CompetitionEdit> pair in competitionEdits)
-                    {
-                        Competition competition;
-                        if (!now.TryGetValue(pair.Key, out competition) || !pair.Value.SameAs(competition))
-                            throw new InvalidDataException("The saved game was written but the check afterwards failed - don't use it.");
-                    }
-                }
-
                 if (playerAttributeEdits.Count > 0)
                 {
                     Dictionary<int, ScoutPlayer> now = new Dictionary<int, ScoutPlayer>();
@@ -853,8 +848,6 @@ namespace CM3SaveGameEditor
                     message.AppendFormat("{0} club(s) changed.", balancesChanged).AppendLine();
                 if (contractEdits.Count > 0)
                     message.AppendFormat("{0} contract(s) changed.", contractsChanged).AppendLine();
-                if (competitionEdits.Count > 0)
-                    message.AppendFormat("{0} competition(s) renamed.", competitionsChanged).AppendLine();
                 if (newPeople.Count > 0)
                     message.AppendFormat("{0} new player(s) / staff added.", peopleAdded).AppendLine();
                 if (removedPeople.Count > 0)

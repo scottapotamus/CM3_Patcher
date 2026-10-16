@@ -512,7 +512,7 @@ namespace CM3SaveGameEditor
 
         // ---------------------------------------------------------------- the exe
 
-        static string FindDefaultExe()
+        public static string FindDefaultExe()
         {
             string[] candidates = {
                 @"E:\Championship Manager 3\cm3.exe",
