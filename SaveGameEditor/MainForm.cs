@@ -73,7 +73,7 @@ namespace CM3SaveGameEditor
         NavItem navExit;
         NavItem navToggle;
         NavItem navSupport;
-        public const string Version = "2.11";
+        public const string Version = "2.30";
         const string SupportUrl = "https://buymeacoffee.com/scottevanso";
         bool sidebarCompact;
         PatcherPanel patcher;

@@ -1,8 +1,8 @@
 # CM3 Utils by Scottapotamus
 
-Version 2.11
+Version 2.30
 
-**Download:** [latest release (v2.11)](https://github.com/scottapotamus/CM3_Patcher/releases/tag/v2.11) | [zip file](https://github.com/scottapotamus/CM3_Patcher/archive/refs/tags/v2.11.zip)
+**Download:** [latest release (v2.30)](https://github.com/scottapotamus/CM3_Patcher/releases/tag/v2.30) | [zip file](https://github.com/scottapotamus/CM3_Patcher/archive/refs/tags/v2.30.zip)
 
 One app for Championship Manager 3 (v3.04e). Start it and pick a part on the first screen or from the menu down the left side:
 
